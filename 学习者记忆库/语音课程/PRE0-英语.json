@@ -1,30 +1,27 @@
 {
+  "schema_version": "v1-compat",
+  "source_of_truth": "英语课程_590课词汇计划.json",
   "course_id": "PRE0",
-  "title": "Computer English 01 · Input, process, output",
-  "level": "A0 → A1",
+  "title": "Computer English 01 · 完全零基础起步",
+  "level": "A0 · 完全零基础",
+  "note": "这是兼容快照；课堂按 590 节词汇计划和逐课语法资产动态读取，不使用本文件替换词汇顺序。",
   "words": [
-    {"word": "input", "meaning": "输入", "part_of_speech": "noun", "example": "The keyboard is an input device.", "translation": "键盘是一种输入设备。"},
-    {"word": "process", "meaning": "处理；过程", "part_of_speech": "verb / noun", "example": "The computer processes the input.", "translation": "电脑处理输入的信息。"},
-    {"word": "output", "meaning": "输出；结果", "part_of_speech": "noun", "example": "The screen shows the output.", "translation": "屏幕显示输出结果。"},
-    {"word": "computer", "meaning": "电脑；计算机", "part_of_speech": "noun", "example": "A computer follows instructions.", "translation": "电脑遵循指令。"},
-    {"word": "screen", "meaning": "屏幕", "part_of_speech": "noun", "example": "The letter appears on the screen.", "translation": "字母出现在屏幕上。"}
+    {"word": "i", "meaning": "我", "part_of_speech": "pronoun", "example": "I am here.", "translation": "我在这里。"},
+    {"word": "you", "meaning": "你", "part_of_speech": "pronoun", "example": "You are here.", "translation": "你在这里。"},
+    {"word": "he", "meaning": "他", "part_of_speech": "pronoun", "example": "He is here.", "translation": "他在这里。"},
+    {"word": "she", "meaning": "她", "part_of_speech": "pronoun", "example": "She is here.", "translation": "她在这里。"},
+    {"word": "we", "meaning": "我们", "part_of_speech": "pronoun", "example": "We are here.", "translation": "我们在这里。"},
+    {"word": "they", "meaning": "他们", "part_of_speech": "pronoun", "example": "They are here.", "translation": "他们在这里。"},
+    {"word": "a", "meaning": "一个", "part_of_speech": "article", "example": "This is a computer.", "translation": "这是一台电脑。"},
+    {"word": "an", "meaning": "一个（用于元音音素前）", "part_of_speech": "article", "example": "This is an input.", "translation": "这是一个输入。"},
+    {"word": "the", "meaning": "这个/特定的", "part_of_speech": "article", "example": "The computer is here.", "translation": "电脑在这里。"},
+    {"word": "this", "meaning": "这个", "part_of_speech": "determiner/pronoun", "example": "This is a computer.", "translation": "这是电脑。"}
   ],
   "grammar": {
-    "pattern": "Subject + verb + object",
-    "explanation": "英语最小陈述句常用“谁 + 做什么 + 对什么做”。",
-    "example": "The computer processes the input.",
-    "translation": "电脑处理输入的信息。"
+    "pattern": "Capital letter + words + period",
+    "explanation": "先认识单词边界、首字母大写和句末句号，再逐步组成最短英语句子。",
+    "example": "A computer starts.",
+    "translation": "电脑启动。"
   },
-  "exercises": [
-    {"id": "PRE0-EN-WORD-01", "type": "word_recall", "prompt": "把中文“输入”写成英文单词。", "expected": "input"},
-    {"id": "PRE0-EN-SPELL-01", "type": "spelling", "prompt": "键盘听写挑战：不复制页面文字，独立输入 computer", "expected": "computer"},
-    {"id": "PRE0-EN-ORDER-01", "type": "word_order", "prompt": "把单词排成正确句子：processes / the input / The computer", "expected": "The computer processes the input."},
-    {"id": "PRE0-EN-WRITE-01", "type": "short_writing", "prompt": "用英文写一句：屏幕显示输出结果。", "expected": "The screen shows the output."}
-  ],
-  "platform_routine": [
-    "看例句并朗读",
-    "在输入框独立回忆并提交",
-    "根据反馈重试或查看提示",
-    "完成翻译、阅读与写作并进入间隔复习"
-  ]
+  "platform_routine": ["看本课新词", "听音并跟读", "键盘拼写", "练语序和句末标点", "提交后进入间隔复习"]
 }
