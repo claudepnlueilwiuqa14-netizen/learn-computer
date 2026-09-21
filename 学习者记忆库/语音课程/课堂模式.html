@@ -424,12 +424,18 @@
     const assistantDraftKey = 'assistant-chat-'+courseId.toLowerCase();
     const assistantLocalKey = 'assistant-chat-local-'+courseId.toLowerCase();
     const $ = id => document.getElementById(id);
+    const apiQuery = new URLSearchParams(window.location.search).get('api') || '';
+    if (apiQuery) { try { localStorage.setItem('classroom-api-base', apiQuery.replace(/\/$/, '')); } catch (_) {} }
+    let apiBase = apiQuery;
+    if (!apiBase) { try { apiBase = localStorage.getItem('classroom-api-base') || ''; } catch (_) { apiBase = ''; } }
+    apiBase = /^https?:\/\//i.test(apiBase) ? apiBase.replace(/\/$/, '') : '';
+    const apiUrl = path => apiBase ? apiBase + path : path;
     const cachePrefix = 'classroom-cache-'+courseId+'-';
     function cachePayload(key, payload) { try { localStorage.setItem(cachePrefix+key, JSON.stringify(payload)); } catch (_) {} }
     function readCachedPayload(key) { try { const raw=localStorage.getItem(cachePrefix+key); return raw ? JSON.parse(raw) : null; } catch (_) { return null; } }
     async function fetchCachedJson(url, key) {
       try {
-        const response = await fetch(url); const payload = await response.json();
+        const response = await fetch(apiUrl(url)); const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.message || '请求失败');
         cachePayload(key, payload); return payload;
       } catch (error) {
@@ -571,7 +577,7 @@
       button.disabled = true; status.textContent = '助教正在整理本课上下文…';
       try {
         const module = activeModuleContext();
-        const response = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId, message, recent:assistantMessages.slice(-12), module_id:module.module_id, module_index:module.module_index})});
+        const response = await fetch(apiUrl('/api/chat'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId, message, recent:assistantMessages.slice(-12), module_id:module.module_id, module_index:module.module_index})});
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error(result.message || '保存失败');
         assistantMessages.push(...(Array.isArray(result.messages) ? result.messages : [{role:'user',content:message},{role:'assistant',content:result.reply}]));
@@ -766,7 +772,7 @@
       button.disabled = true; if (feedback) feedback.textContent = '正在自动校对并保存…';
       const terms = (button.dataset.terms || '').split(',').filter(Boolean);
       try {
-        const response = await fetch('/api/module-answer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId,module_id:id,module_index:Number(id.replace(/\D/g,''))||1,language,answer,rubric_terms:terms})});
+        const response = await fetch(apiUrl('/api/module-answer'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId,module_id:id,module_index:Number(id.replace(/\D/g,''))||1,language,answer,rubric_terms:terms})});
         const result = await response.json(); if (!response.ok || !result.ok) throw new Error(result.message || '保存失败');
         const score = result.auto_screen?.score; moduleAnswerState[id+'-'+language] = {answer, feedback:result.message || '已保存，等待老师批改', score, notes:result.auto_screen?.notes || [], submitted:true}; saveModuleProgress(); if (feedback) feedback.textContent = (result.message || '已保存') + (score == null ? '' : ` · 自动预审 ${score} 分`); document.querySelector(`#integrated-${id}`)?.classList.add('completed');
       } catch (error) { moduleAnswerState[id+'-'+language] = Object.assign({}, moduleAnswerState[id+'-'+language], {answer,feedback:'已暂存在本机：'+error.message}); saveModuleProgress(); if (feedback) feedback.textContent = '已暂存在本机：'+error.message+'；联网后可再次提交'; }
@@ -879,7 +885,7 @@
       try {
         const item = defenseItems[defenseIndex] || {};
         const question = typeof item === 'string' ? item : (item.question || '');
-        const response = await fetch('/api/defense', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId, defense_id:id, defense_index:defenseIndex + 1, question, answer})});
+        const response = await fetch(apiUrl('/api/defense'), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId, defense_id:id, defense_index:defenseIndex + 1, question, answer})});
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error(result.message || '保存失败');
         defenseAnswerState[id] = Object.assign({}, defenseAnswerState[id], {feedback:result.message || '已提交并永久锁定'});
@@ -893,7 +899,7 @@
       const form=button.closest('.evidence-form'); const evidence=form.querySelector('[data-evidence]').value.trim(); const command=form.querySelector('[data-command]')?.value.trim() || ''; const artifact=form.querySelector('[data-artifact]')?.value.trim() || ''; const status=form.querySelector('[data-status]');
       if(!evidence){status.textContent='先写下这次观察或解释';return;}
       button.disabled=true; status.textContent='正在保存证据…';
-      try { const route=form.dataset.kind==='lab'?'/api/lab':'/api/gate'; const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:courseId,item_id:form.dataset.item,answer:evidence,evidence,command,artifact})}); const result=await response.json(); if(!response.ok||!result.ok) throw new Error(result.message||'保存失败'); status.textContent=result.message; if(form.dataset.kind==='gate'){submittedGateIds.add(form.dataset.item);renderFlowNavigation();} } catch(error) { status.textContent='暂存失败：'+error.message+'；请保留文字稍后重试'; } finally { button.disabled=false; }
+      try { const route=form.dataset.kind==='lab'?'/api/lab':'/api/gate'; const response=await fetch(apiUrl(route),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:courseId,item_id:form.dataset.item,answer:evidence,evidence,command,artifact})}); const result=await response.json(); if(!response.ok||!result.ok) throw new Error(result.message||'保存失败'); status.textContent=result.message; if(form.dataset.kind==='gate'){submittedGateIds.add(form.dataset.item);renderFlowNavigation();} } catch(error) { status.textContent='暂存失败：'+error.message+'；请保留文字稍后重试'; } finally { button.disabled=false; }
     }
     function renderExercise() {
       const exercises = englishLesson.exercises || []; if (!exercises.length) { $('exerciseType').textContent='暂无练习'; $('exerciseCount').textContent='0 / 0'; $('exercisePrompt').textContent='本课英语练习正在生成，请稍后刷新。'; $('englishPrevBtn').disabled=true; $('englishNextBtn').disabled=true; return; }
@@ -912,7 +918,7 @@
       const exercises = englishLesson.exercises || []; const item = exercises[exerciseIndex]; const value=$('englishAnswer').value.trim(); if(!value){$('englishStatus').textContent='先写下你的答案';return;}
       $('englishSubmitBtn').disabled=true; $('englishStatus').textContent='正在保存英语练习…';
       const itemId=String(item.id||exerciseIndex); const attempt=Number(englishExerciseState[itemId]?.attempt || 0)+1;
-      try { const response=await fetch('/api/english',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:englishLesson.course_id || courseId,exercise_id:item.id,exercise_type:item.type,strand:item.strand,stage:englishLesson.stage?.id || '',review_mode:item.review_mode,expected:item.expected,answer:value,hint_used:englishHintUsed,attempt})}); const result=await response.json(); if(!response.ok||!result.ok) throw new Error(result.message || '保存失败'); submittedEnglishIds.add(itemId); englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{answer:value,submitted:true,feedback:result.message || '',correct:result.correct,review_mode:result.review || item.review_mode,attempt,hintUsed:englishHintUsed}); localStorage.removeItem('english-draft-'+courseId+'-'+itemId); $('englishStatus').textContent=result.message; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; renderExerciseNavOnly(); saveEnglishProgress(); } catch(error) { saveEnglishDraft(); englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{feedback:'已暂存在本机：'+error.message,attempt,hintUsed:englishHintUsed}); $('englishStatus').textContent='已暂存在本机：'+error.message+'；联网或重启本地服务后可再次提交'; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; saveEnglishProgress(); } finally { $('englishSubmitBtn').disabled=false; }
+      try { const response=await fetch(apiUrl('/api/english'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:englishLesson.course_id || courseId,exercise_id:item.id,exercise_type:item.type,strand:item.strand,stage:englishLesson.stage?.id || '',review_mode:item.review_mode,expected:item.expected,answer:value,hint_used:englishHintUsed,attempt})}); const result=await response.json(); if(!response.ok||!result.ok) throw new Error(result.message || '保存失败'); submittedEnglishIds.add(itemId); englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{answer:value,submitted:true,feedback:result.message || '',correct:result.correct,review_mode:result.review || item.review_mode,attempt,hintUsed:englishHintUsed}); localStorage.removeItem('english-draft-'+courseId+'-'+itemId); $('englishStatus').textContent=result.message; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; renderExerciseNavOnly(); saveEnglishProgress(); } catch(error) { saveEnglishDraft(); englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{feedback:'已暂存在本机：'+error.message,attempt,hintUsed:englishHintUsed}); $('englishStatus').textContent='已暂存在本机：'+error.message+'；联网或重启本地服务后可再次提交'; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; saveEnglishProgress(); } finally { $('englishSubmitBtn').disabled=false; }
     }
     function renderExerciseNavOnly(){document.querySelectorAll('.exercise-index-btn').forEach((b,i)=>{const item=(englishLesson.exercises||[])[i];const done=isExerciseDone(item);b.classList.toggle('done',done);b.title=(item?.strand||item?.type||'练习')+' · '+(done?'已提交':'未提交');});}
     function continueFromQuestion() {
@@ -981,7 +987,7 @@
     $('replayBtn').onclick=()=>{if(index>=0)playTurn(index);};
     $('slowerBtn').onclick=()=>{slow=!slow;$('slowerBtn').textContent=slow?'▶ 正常速度':'◀ 慢一点';if(currentAudio)currentAudio.playbackRate=slow?.82:1;};
     $('continueBtn').onclick=continueFromQuestion; $('questionContinueBtn').onclick=continueFromQuestion;
-    $('submitBtn').onclick=async()=>{const value=$('answer').value.trim();if(!value){$('answerStatus').textContent='先写一句你的预测';return;} localStorage.setItem(answerKey,value);localStorage.setItem(phaseKey,'answer-saved');$('submitBtn').disabled=true;$('answerStatus').textContent='正在写入学习记忆…';try{const response=await fetch('/api/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer:value,course_id:courseId,question_id:courseId+'-PREDICT-CORE'})});const result=await response.json();if(!response.ok)throw new Error(result.message||'保存失败');$('answerStatus').textContent=result.message;$('englishHint').textContent=result.language_coaching || ''; $('englishHint').classList.toggle('show',Boolean(result.language_coaching)); $('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;setTask('answer','done');setTask('recall','active');setStatus('回答已保存 · 点击题目下方“继续下一段”',false);}catch(error){$('answerStatus').textContent='答案已暂存在本页：'+error.message+'；仍可继续下一段';$('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;}finally{$('submitBtn').disabled=false;}};
+    $('submitBtn').onclick=async()=>{const value=$('answer').value.trim();if(!value){$('answerStatus').textContent='先写一句你的预测';return;} localStorage.setItem(answerKey,value);localStorage.setItem(phaseKey,'answer-saved');$('submitBtn').disabled=true;$('answerStatus').textContent='正在写入学习记忆…';try{const response=await fetch(apiUrl('/api/answer'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer:value,course_id:courseId,question_id:courseId+'-PREDICT-CORE'})});const result=await response.json();if(!response.ok)throw new Error(result.message||'保存失败');$('answerStatus').textContent=result.message;$('englishHint').textContent=result.language_coaching || ''; $('englishHint').classList.toggle('show',Boolean(result.language_coaching)); $('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;setTask('answer','done');setTask('recall','active');setStatus('回答已保存 · 点击题目下方“继续下一段”',false);}catch(error){$('answerStatus').textContent='答案已暂存在本页：'+error.message+'；仍可继续下一段';$('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;}finally{$('submitBtn').disabled=false;}};
     $('englishSubmitBtn').onclick=submitEnglish;
     $('englishAnswer').addEventListener('input',saveEnglishDraft);
     $('englishHintBtn').onclick=()=>{englishHintUsed=!englishHintUsed;const item=(englishLesson.exercises||[])[exerciseIndex];if(item){const id=String(item.id||exerciseIndex);englishExerciseState[id]=Object.assign({},englishExerciseState[id],{hintUsed:englishHintUsed});saveEnglishProgress();}$('exerciseHint').classList.toggle('show',englishHintUsed);$('englishHintBtn').textContent=englishHintUsed?'隐藏提示':'查看提示';};

@@ -6,6 +6,8 @@ import argparse
 import json
 import os
 import tempfile
+import urllib.error
+import urllib.request
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,6 +24,24 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
     _pronunciation_cache: dict | None = None
     _vocabulary_plan_cache: dict | None = None
     _grammar_plan_cache: dict | None = None
+
+    @classmethod
+    def ai_config(cls) -> dict:
+        """Read optional model settings only from the server environment."""
+        base_url = os.environ.get("AI_BASE_URL", "https://api.985la.cn").strip().rstrip("/")
+        api_key = os.environ.get("AI_API_KEY", "").strip()
+        model = os.environ.get("AI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+        try:
+            timeout = max(5.0, min(120.0, float(os.environ.get("AI_TIMEOUT_SECONDS", "35"))))
+        except ValueError:
+            timeout = 35.0
+        if base_url.endswith("/chat/completions"):
+            endpoint = base_url
+        elif base_url.endswith("/v1"):
+            endpoint = base_url + "/chat/completions"
+        else:
+            endpoint = base_url + "/v1/chat/completions"
+        return {"endpoint": endpoint, "api_key": api_key, "model": model, "timeout": timeout}
 
     ENGLISH_ROADMAP = [
         {
@@ -151,6 +171,52 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 "你正在做的模块、看到的具体现象、或者你希望得到的结果。"
                 "你也可以只写一句最简单的话，助教会从这句话开始追问。")
 
+    def remote_tutor_reply(self, context: dict, message: str, recent: list[dict]) -> str | None:
+        """Ask an OpenAI-compatible upstream only when the server has a key.
+
+        The key never reaches the browser, JSONL records, or GitHub. Any network
+        or schema failure returns None so the explainable local tutor remains
+        available.
+        """
+        config = self.ai_config()
+        if not config["api_key"]:
+            return None
+        recent_messages = []
+        for item in recent[-8:]:
+            role = "assistant" if item.get("role") == "assistant" else "user"
+            content = str(item.get("content", "")).strip()[:2_000]
+            if content:
+                recent_messages.append({"role": role, "content": content})
+        system = (
+            "你是本节计算机课程的耐心双语助教。用户是计算机和英语初学者。"
+            "必须先用极简单的中文解释，再给一个可执行的小步骤；结合当前课程、模块和已保存记录。"
+            "不要声称自己是当前 ChatGPT 会话，不要索要密码、API key 或上传私人文件。"
+            "如果涉及命令，只给可撤销、低风险、逐步验证的操作，并说明预期输出。\n"
+            "当前课堂上下文：" + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
+        )
+        payload = {
+            "model": config["model"],
+            "messages": [{"role": "system", "content": system}, *recent_messages, {"role": "user", "content": message}],
+            "temperature": 0.2,
+            "max_tokens": 900,
+        }
+        request = urllib.request.Request(
+            config["endpoint"],
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {config['api_key']}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=config["timeout"]) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if isinstance(content, list):
+                content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+            content = str(content).strip()
+            return content[:8_000] if content else None
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError):
+            return None
+
     def chat_context(self, course_id: str, module_id: str = "", module_index: int = 0) -> dict:
         """Collect a small, durable lesson snapshot for the local conversational tutor.
 
@@ -191,6 +257,12 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         recent = recent if isinstance(recent, list) else []
         previous = [str(item.get("content", "")).strip() for item in recent if item.get("role") == "user" and item.get("content")]
         reply = self.assistant_reply(course_id, message)
+        remote_reply = self.remote_tutor_reply(context, message, recent)
+        assistant_mode = "local_contextual"
+        if remote_reply:
+            reply = remote_reply
+            assistant_mode = "remote_model"
+        context["assistant_mode"] = assistant_mode
         prefix = f"我陪你继续学《{context['course_title']}》。"
         if context["module_index"]:
             prefix += f"你现在在第 {context['module_index']} 个模块"
@@ -207,6 +279,8 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             prefix += "最近的英语练习原句也已保留，接下来会一起检查拼写、语序和语法。"
         progress = (f"本节已保存：概念回答 {context['answers']} 条、英语练习 {context['english']} 条、"
                     f"模块回答 {context['modules']} 条、关卡 {context['gates']} 条、Lab {context['labs']} 条。")
+        if assistant_mode == "remote_model":
+            prefix += "云端助教已结合本节记录生成这次回答。"
         return prefix + reply + "\n\n" + progress, context
 
     def course_navigation(self, course_id: str) -> dict:
@@ -1180,7 +1254,17 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         if path.endswith((".html", ".css", ".js")):
             self.send_header("Cache-Control", "no-store, max-age=0")
             self.send_header("Pragma", "no-cache")
+        cors_origin = os.environ.get("CORS_ORIGIN", "").strip()
+        if cors_origin:
+            self.send_header("Access-Control-Allow-Origin", cors_origin)
+            self.send_header("Vary", "Origin")
         super().end_headers()
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.end_headers()
 
     def do_GET(self) -> None:
         """Expose the lesson and learner snapshot to the single classroom page."""
@@ -1417,7 +1501,7 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 assistant_record = {
                     "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"), "course_id": course_id,
                     "role": "assistant", "content": reply, "module_id": module_id, "module_index": module_index,
-                    "source": "unified-classroom-chat", "assistant_mode": "local_contextual",
+                    "source": "unified-classroom-chat", "assistant_mode": context.get("assistant_mode", "local_contextual"),
                     "teacher_review": "pending", "context_snapshot": context,
                 }
                 per_course = self.memory_root / "课堂记录" / "助教聊天" / f"{course_id}.jsonl"
@@ -1665,6 +1749,7 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--host", default=os.environ.get("CLASSROOM_HOST", "127.0.0.1"))
     parser.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
     root = args.root.resolve()
@@ -1673,8 +1758,9 @@ def main() -> None:
     handler = lambda *handler_args, **kwargs: ClassroomHandler(  # noqa: E731
         *handler_args, directory=str(root), **kwargs
     )
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
-    print(f"Classroom: http://127.0.0.1:{args.port}/课堂模式.html", flush=True)
+    server = ThreadingHTTPServer((args.host, args.port), handler)
+    display_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+    print(f"Classroom: http://{display_host}:{args.port}/课堂模式.html", flush=True)
     server.serve_forever()
 
 

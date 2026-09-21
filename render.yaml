@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: learn-computer-classroom
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: AI_BASE_URL
+        value: https://api.985la.cn
+      - key: AI_MODEL
+        value: gpt-4o-mini
+      - key: AI_TIMEOUT_SECONDS
+        value: "35"
+      - key: AI_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
