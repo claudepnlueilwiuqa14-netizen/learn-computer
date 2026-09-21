@@ -1110,6 +1110,8 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 "course_matrix": (self.memory_root / "掌握矩阵.json").exists(),
                 "course_contracts": (self.memory_root.parent / "逐课专属深度合同_590课.json").exists(),
                 "english_lessons": any(self.classroom_root.glob("*-英语.json")),
+                "english_grammar": (self.classroom_root / "英语语法课程_590课.json").exists(),
+                "pronunciation_asset": (self.classroom_root / "英语发音_20k.json").exists(),
                 "local_audio": (self.classroom_root / "PRE0-第一段-segments").exists(),
                 "video_config": (self.classroom_root / "视频课件配置.json").exists(),
                 "learner_state": (self.memory_root / "当前状态.json").exists(),
