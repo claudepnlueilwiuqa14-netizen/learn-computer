@@ -21,6 +21,7 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
     _summary_cache: dict[str, dict] = {}
     _pronunciation_cache: dict | None = None
     _vocabulary_plan_cache: dict | None = None
+    _grammar_plan_cache: dict | None = None
 
     ENGLISH_ROADMAP = [
         {
@@ -505,6 +506,26 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             self._vocabulary_plan_cache = self.load_json_file(self.classroom_root / "英语课程_590课词汇计划.json", {"lessons": []})
         return self._vocabulary_plan_cache
 
+    def grammar_plan(self) -> dict:
+        """Load the explicit 590-lesson grammar route.
+
+        Stage summaries remain useful for orientation, but this asset is the
+        auditable source of truth for the actual lesson grammar: every course
+        has a primary topic, spaced reviews, a model sentence, contrastive
+        warning and mastery check.
+        """
+        if self._grammar_plan_cache is None:
+            self._grammar_plan_cache = self.load_json_file(
+                self.classroom_root / "英语语法课程_590课.json",
+                {"topics": [], "lessons": [], "topic_count": 0, "lesson_count": 0},
+            )
+        return self._grammar_plan_cache
+
+    def grammar_for_course(self, course_id: str) -> dict:
+        payload = self.grammar_plan()
+        lessons = payload.get("lessons", []) if isinstance(payload, dict) else []
+        return next((item for item in lessons if item.get("course_id") == course_id), {})
+
     def integrated_modules(self, course_id: str) -> list[dict]:
         """Return lesson modules with a beginner bridge and stable IDs for in-page evidence."""
         summary = self.contract_summary(course_id)
@@ -728,6 +749,15 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             "policy": {
                 "each_lesson": ["按阶段递进的新词（A0 每课 10 个；全路线 20,000 个去重词形）", "间隔复习词", "英式读音听辨与跟读", "英文认读与中英回忆", "键盘拼写/听写", "语序与语法", "英译中与中译英", "阅读理解", "阶段适配的短句、段落或论文写作"],
                 "strands": ["recognition", "meaning_recall", "spelling", "pronunciation", "listening", "word_order", "grammar", "translation", "reading", "academic_writing"],
+                "grammar_asset": "英语语法课程_590课.json",
+                "grammar_policy": "每课一个主语法主题 + 间隔复习主题；每个主题包含结构、白话解释、例句、易混点、平台任务和掌握标准。覆盖 A0–C2+ 核心现代英语与计算机学术写作语法。",
+                "pronunciation_policy": {
+                    "target": "en-GB reference pronunciation",
+                    "asset": "英语发音_20k.json",
+                    "entries": 20000,
+                    "loop": ["听辨", "IPA/重音", "慢速跟读", "正常速度复述", "键盘拼写", "自录回放与老师反馈"],
+                    "honesty": "平台可以训练并测量这些证据，但不能保证任何人达到绝对零口音；口音会受母语、听力、身体和语音环境影响。",
+                },
                 "promotion": "完成当前阶段的词汇、语法、阅读、翻译和写作证据后，再进入下一阶段；不以看过页面代替掌握。",
                 "platform_only": "所有训练、草稿、提示、批改和复习都在课堂页面完成，不要求纸面作业。",
                 "retrieval": "每题提交后即时反馈并进入本地间隔复习队列；开放式翻译/写作保留原答案，标记为待老师批改。",
@@ -823,6 +853,20 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         topic = str(course.get("topic_focus", title))
         stage = self.english_stage_for(course_id)
         syllabus = self.english_lesson_blueprint(int(stage["course_index"]), stage)
+        grammar_record = self.grammar_for_course(course_id)
+        if grammar_record:
+            # Replace the broad stage slogan with this lesson's explicit
+            # grammar contract.  The stage remains visible as the learner's
+            # map; the record below is what the learner must actually practise.
+            syllabus["grammar"] = f"{grammar_record.get('title', '本课语法')} · {grammar_record.get('pattern', '')}"
+            syllabus["grammar_explanation"] = grammar_record.get("explanation", "")
+            syllabus["grammar_contrast"] = grammar_record.get("contrast", "")
+            syllabus["grammar_task"] = grammar_record.get("task", "")
+            syllabus["grammar_mastery_check"] = grammar_record.get("mastery_check", "")
+            syllabus["sentence"] = grammar_record.get("example", syllabus.get("sentence", ""))
+            syllabus["translation"] = grammar_record.get("translation", syllabus.get("translation", ""))
+            syllabus["grammar_topic_ids"] = grammar_record.get("grammar_topic_ids", [])
+            syllabus["primary_grammar_topic_id"] = grammar_record.get("primary_topic_id", "")
         # The vocabulary plan is the auditable source of truth for the 590-course route.
         # Keep the hand-authored blueprint as a fallback so a missing/corrupt plan never
         # makes the classroom unavailable.
@@ -856,11 +900,16 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             syllabus["cumulative_word_target"] = int(plan.get("cumulative_word_target", 0))
             # Every planned word has a pronunciation practice slot.  The browser uses
             # the Web Speech API when available and still keeps a typed fallback.
+            pronunciation_items = self.pronunciation_asset().get("items", {})
+            pronunciation_lookup = {str(key).lower(): value for key, value in pronunciation_items.items()} if isinstance(pronunciation_items, dict) else {}
             syllabus["pronunciation"] = {
-                "mode": "listen-repeat-record",
+                "mode": "listen-repeat-self-check",
                 "accent": "en-GB",
-                "items": [{"word": word, "ipa": "", "sound_hint": "先听老师读，再慢速跟读并录入自己的拼写。"} for word in plan_new],
-                "note": "IPA is added progressively; pronunciation is checked by listen, repeat, and spelling evidence rather than by a fake numeric score."
+                "voice": "English (United Kingdom) when the browser provides it",
+                "ipa_source": "英语发音_20k.json · 20,000 entries",
+                "items": [{"word": word, "ipa": str(pronunciation_lookup.get(word, {}).get("ipa", "")), "sound_hint": "先听完整音 → 慢速跟读两遍 → 遮住单词拼写 → 再听并自查重音。"} for word in plan_words],
+                "training_loop": ["听辨", "看 IPA 与重音", "慢速跟读", "正常速度复述", "键盘拼写", "记录最容易混淆的音"],
+                "note": "浏览器提供 en-GB 播放和 IPA 参照；页面不伪造口音分数。真正的发音掌握要用听辨、跟读、自录回放和老师反馈反复验证。"
             }
             syllabus["review_cycle"] = [1, 3, 7, 14, 30, 60]
         if not seed:
@@ -893,7 +942,7 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 {"id": f"{course_id}-EN-TYPE-01", "type": "typing", "strand": "spelling", "prompt": f"在键盘上独立输入：{syllabus['sentence']}", "expected": syllabus["sentence"], "hint": "先按单词之间的空格，再检查句号。"},
                 {"id": f"{course_id}-EN-PRON-01", "type": "pronunciation", "strand": "pronunciation", "prompt": f"点击‘朗读题目’，跟读这个词两遍，再输入它：{syllabus['words'][1]['word']}", "speak_text": syllabus["words"][1]["word"], "expected": syllabus["words"][1]["word"], "hint": "关注词尾音，不追求一次完美；先听、再跟读、最后拼写。"},
                 {"id": f"{course_id}-EN-MEANING-01", "type": "meaning_recall", "strand": "meaning_recall", "prompt": f"把中文“{syllabus['words'][1]['meaning']}”写成英文单词。", "expected": syllabus["words"][1]["word"], "hint": "从本模块词汇卡中回忆，不要急着看答案。"},
-                {"id": f"{course_id}-EN-GRAMMAR-01", "type": "grammar", "strand": "grammar", "prompt": f"本模块语法：{syllabus['grammar']}。请用一句中文说明它在短句中的作用。", "expected": "", "hint": syllabus["grammar"], "review_mode": "teacher"},
+                {"id": f"{course_id}-EN-GRAMMAR-01", "type": "grammar", "strand": "grammar", "prompt": f"本课语法：{syllabus['grammar']}。请先写出结构，再用自己的话说明它在短句中的作用。", "expected": "", "hint": "；".join(item for item in [syllabus["grammar"], syllabus.get("grammar_explanation", ""), syllabus.get("grammar_contrast", "")] if item), "review_mode": "teacher"},
                 {"id": f"{course_id}-EN-TRANSLATE-01", "type": "translation_en_zh", "strand": "translation", "prompt": f"把英文翻译成中文：{syllabus['sentence']}", "expected": syllabus["translation"], "hint": "先找谁、做什么、对什么做。", "review_mode": "teacher"},
                 {"id": f"{course_id}-EN-WRITE-01", "type": "short_writing", "strand": "academic_writing", "prompt": syllabus["task"], "expected": "", "hint": "先写最短、最清楚的句子；不会的词可以从词汇卡复制后再自己改写。", "review_mode": "teacher"},
             ]
@@ -901,7 +950,26 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 exercises.append({"id": f"{course_id}-EN-ORDER-01", "type": "word_order", "strand": "word_order", "prompt": f"把词排成正确句子：{syllabus['sentence']}", "expected": syllabus["sentence"], "hint": "先找主语，再找动作，最后找对象。"})
             else:
                 exercises.append({"id": f"{course_id}-EN-READ-01", "type": "reading", "strand": "reading", "passage": syllabus["sentence"]+" "+syllabus["translation"], "prompt": "阅读本模块短文后，用英文写出一个关键词。", "expected": syllabus["words"][0]["word"], "hint": "回到短文中定位关键词。"})
-            return {"course_id": course_id, "title": f"Computer English · {title}", "level": f"{stage['id']} · {stage['label']}", "stage": {**stage, "unit": syllabus["unit"]}, "syllabus": syllabus, "words": lesson_words, "grammar": {"pattern": syllabus["grammar"], "explanation": f"本课英语目标：{syllabus['unit']}。", "example": syllabus["sentence"], "translation": syllabus["translation"]}, "lesson_sentence": {"english": syllabus["sentence"], "chinese": syllabus["translation"]}, "exercises": exercises, "platform_routine": ["老师先用最简单的话解释", "听音、跟读并看本课新词和间隔复习词", "在输入框独立回忆并键盘拼写", "练语序、语法、翻译、阅读和短写作", "提交后看自动校对与老师批改，错误进入间隔复习"], "vocabulary_target": {"course_words": len(lesson_words), "new_words": len(syllabus.get('new_words', lesson_words)), "review_words": len(syllabus.get('review_words', [])), "cumulative_target": syllabus.get('cumulative_word_target', 0), "route_target": stage["word_target"], "overall_target": 20000, "source": "英语课程_590课词汇计划.json；计划量不等于已掌握量"}}
+            grammar_topics = []
+            grammar_payload = self.grammar_plan()
+            topic_by_id = {str(item.get("id")): item for item in grammar_payload.get("topics", []) if isinstance(item, dict)}
+            for topic_id in syllabus.get("grammar_topic_ids", []):
+                if topic_by_id.get(str(topic_id)):
+                    grammar_topics.append(topic_by_id[str(topic_id)])
+            grammar_detail = {
+                "title": grammar_record.get("lesson_focus", syllabus.get("grammar", "")) if grammar_record else syllabus.get("grammar", ""),
+                "pattern": grammar_record.get("pattern", syllabus.get("grammar", "")) if grammar_record else syllabus.get("grammar", ""),
+                "explanation": syllabus.get("grammar_explanation", f"本课英语目标：{syllabus['unit']}。"),
+                "example": syllabus["sentence"],
+                "translation": syllabus["translation"],
+                "contrast": syllabus.get("grammar_contrast", ""),
+                "task": syllabus.get("grammar_task", syllabus.get("task", "")),
+                "mastery_check": syllabus.get("grammar_mastery_check", ""),
+                "topic_ids": syllabus.get("grammar_topic_ids", []),
+                "topics": grammar_topics,
+                "coverage": grammar_payload.get("coverage", "") if isinstance(grammar_payload, dict) else "",
+            }
+            return {"course_id": course_id, "title": f"Computer English · {title}", "level": f"{stage['id']} · {stage['label']}", "stage": {**stage, "unit": syllabus["unit"]}, "syllabus": syllabus, "words": lesson_words, "grammar": grammar_detail, "lesson_sentence": {"english": syllabus["sentence"], "chinese": syllabus["translation"]}, "exercises": exercises, "platform_routine": ["老师先用最简单的话解释", "听音、跟读并看本课新词和间隔复习词", "在输入框独立回忆并键盘拼写", "练语序、语法、翻译、阅读和短写作", "提交后看自动校对与老师批改，错误进入间隔复习"], "vocabulary_target": {"course_words": len(lesson_words), "new_words": len(syllabus.get('new_words', lesson_words)), "review_words": len(syllabus.get('review_words', [])), "cumulative_target": syllabus.get('cumulative_word_target', 0), "route_target": stage["word_target"], "overall_target": 20000, "source": "英语课程_590课词汇计划.json；计划量不等于已掌握量"}, "grammar_target": {"topic_count": len(grammar_topics), "primary_topic_id": syllabus.get("primary_grammar_topic_id", ""), "asset": "英语语法课程_590课.json"}}
         raw_terms = [term.strip() for term in topic.replace("/", ",").replace("（", ",").replace("）", "").split(",") if term.strip()]
         glossary = {
             "操作系统": "operating system", "数据库": "database", "计算机": "computer", "电脑": "computer",
@@ -1151,7 +1219,12 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         if route == "/api/audit":
             courses = self.load_courses()
             contract_ids = {str(item.get("Id")) for item in self.load_contracts()}
-            report = {"courses_total": len(courses), "contract_total": len(contract_ids), "english_total": 0, "missing_contract": [], "missing_english": [], "checked_at": datetime.now().astimezone().isoformat(timespec="seconds")}
+            grammar_payload = self.grammar_plan()
+            grammar_lessons = {str(item.get("course_id")): item for item in grammar_payload.get("lessons", []) if isinstance(item, dict)}
+            pronunciation_items = self.pronunciation_asset().get("items", {})
+            pronunciation_keys = {str(key).lower() for key in pronunciation_items} if isinstance(pronunciation_items, dict) else set()
+            vocabulary_lessons = {str(item.get("course_id")): item for item in self.vocabulary_plan().get("lessons", []) if isinstance(item, dict)}
+            report = {"courses_total": len(courses), "contract_total": len(contract_ids), "english_total": 0, "grammar_total": len(grammar_lessons), "pronunciation_total": len(pronunciation_keys), "missing_contract": [], "missing_english": [], "missing_grammar": [], "missing_pronunciation": [], "checked_at": datetime.now().astimezone().isoformat(timespec="seconds")}
             for item in courses:
                 cid = str(item.get("id"))
                 if cid not in contract_ids:
@@ -1169,7 +1242,12 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                     report["english_total"] += 1
                 except (OSError, json.JSONDecodeError, KeyError, TypeError):
                     report["missing_english"].append(cid)
-            report["ok"] = not report["missing_contract"] and not report["missing_english"] and report["courses_total"] == 590 and report["contract_total"] == 590 and report["english_total"] == 590
+                if cid not in grammar_lessons:
+                    report["missing_grammar"].append(cid)
+                planned = vocabulary_lessons.get(cid, {}).get("new_words", [])
+                if any(str(word).lower() not in pronunciation_keys for word in planned):
+                    report["missing_pronunciation"].append(cid)
+            report["ok"] = not report["missing_contract"] and not report["missing_english"] and not report["missing_grammar"] and not report["missing_pronunciation"] and report["courses_total"] == 590 and report["contract_total"] == 590 and report["english_total"] == 590 and report["grammar_total"] == 590 and report["pronunciation_total"] >= 20000
             self.send_json(200, report)
             return
         if route == "/api/english":

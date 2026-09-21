@@ -1,8 +1,13 @@
 {
   "schema_version": "v2",
-  "accent": "British learner reference for starter words; CMUdict reference elsewhere",
+  "accent": "en-GB reference target; CMUdict-derived entries are a phonemic reference, not a promise of a native accent",
   "source": "CMUdict + hand-checked starter IPA",
   "count": 20000,
+  "training_policy": {
+    "loop": ["listen", "notice IPA and stress", "slow shadowing", "normal-speed repetition", "spelling recall", "self-record and teacher feedback"],
+    "audio": "The classroom uses the browser's English (United Kingdom) speech voice when available.",
+    "honesty": "IPA and text-to-speech can guide practice; they cannot certify a learner's accent without listening evidence and human or validated speech assessment."
+  },
   "items": {
     "i": {
       "ipa": "/aɪ/",
