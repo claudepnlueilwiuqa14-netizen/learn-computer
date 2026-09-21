@@ -151,6 +151,51 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 "你正在做的模块、看到的具体现象、或者你希望得到的结果。"
                 "你也可以只写一句最简单的话，助教会从这句话开始追问。")
 
+    def chat_context(self, course_id: str, module_id: str = "", module_index: int = 0) -> dict:
+        """Collect a small, durable lesson snapshot for the local conversational tutor.
+
+        The local tutor is deliberately explainable: it uses the current lesson,
+        the learner's saved evidence, and recent chat turns. It never claims to
+        be the live Codex/ChatGPT conversation or sends a secret to the browser.
+        """
+        history_root = self.memory_root / "课堂记录"
+        def count(folder: str) -> int:
+            path = history_root / folder / f"{course_id}.jsonl"
+            return len(self.read_tail(path, 10_000))
+        course = self.course_record(course_id)
+        contract = self.course_contract(course_id)
+        return {
+            "course_id": course_id,
+            "course_title": str(course.get("title", course_id)),
+            "topic": str(course.get("topic_focus", course.get("title", "computer science"))),
+            "module_id": str(module_id or ""),
+            "module_index": max(0, int(module_index or 0)),
+            "answers": count("课堂回答"),
+            "english": count("英语练习"),
+            "modules": count("模块回答"),
+            "gates": count("关卡验收"),
+            "labs": count("Lab验收"),
+            "invariant": str(contract.get("Invariant", "每个结论都要对应可观察证据")),
+        }
+
+    def chat_reply(self, course_id: str, message: str, recent: list[dict] | None = None, *, module_id: str = "", module_index: int = 0) -> tuple[str, dict]:
+        """Return a continuous-tutor reply and the context used to produce it."""
+        context = self.chat_context(course_id, module_id, module_index)
+        recent = recent if isinstance(recent, list) else []
+        previous = [str(item.get("content", "")).strip() for item in recent if item.get("role") == "user" and item.get("content")]
+        reply = self.assistant_reply(course_id, message)
+        prefix = f"我陪你继续学《{context['course_title']}》。"
+        if context["module_index"]:
+            prefix += f"你现在在第 {context['module_index']} 个模块"
+            if context["module_id"]:
+                prefix += f"（{context['module_id']}）"
+            prefix += "。"
+        if previous:
+            prefix += "我也记得你刚才提到的：“" + previous[-1][:120] + "”。"
+        progress = (f"本节已保存：概念回答 {context['answers']} 条、英语练习 {context['english']} 条、"
+                    f"模块回答 {context['modules']} 条、关卡 {context['gates']} 条、Lab {context['labs']} 条。")
+        return prefix + reply + "\n\n" + progress, context
+
     def course_navigation(self, course_id: str) -> dict:
         """Return stable previous/next course links without changing learner state."""
         courses = self.load_courses()
@@ -1223,6 +1268,25 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             questions = [item for item in self.read_tail(questions_path, 200) if item.get("course_id") == course_id]
             self.send_json(200, {"ok": True, "course_id": course_id, "questions": questions[-50:]})
             return
+        if route == "/api/chat":
+            course_id = self.course_id_from_query(parsed)
+            chat_path = self.memory_root / "课堂记录" / "助教聊天" / f"{course_id}.jsonl"
+            messages = self.read_tail(chat_path, 200)
+            # Older inbox entries remain part of the learner's permanent record.
+            # Convert them on read so an upgrade never makes previous questions disappear.
+            legacy_messages = []
+            legacy_path = self.memory_root / "课堂记录" / "助教问题.jsonl"
+            for item in self.read_tail(legacy_path, 500):
+                if item.get("course_id") != course_id:
+                    continue
+                timestamp = item.get("timestamp") or datetime.now().astimezone().isoformat(timespec="seconds")
+                legacy_messages.extend([
+                    {"timestamp": timestamp, "course_id": course_id, "role": "user", "content": item.get("question", ""), "source": "legacy-assistant-inbox"},
+                    {"timestamp": timestamp, "course_id": course_id, "role": "assistant", "content": item.get("assistant_reply", item.get("reply", "")), "source": "legacy-assistant-inbox", "assistant_mode": item.get("assistant_mode", "local_contextual"), "teacher_review": item.get("teacher_review", "pending")},
+                ])
+            messages = legacy_messages + messages
+            self.send_json(200, {"ok": True, "course_id": course_id, "messages": messages[-200:], "persistent_path": f"课堂记录/助教聊天/{course_id}.jsonl", "assistant_mode": "local_contextual"})
+            return
         if route == "/api/review":
             queue_path = self.memory_root / "复习队列.json"
             payload = self.load_json_file(queue_path, {"schema_version": "review-queue-v1", "policy": {"spacing_days": [1, 3, 7, 14, 30, 60]}, "items": []})
@@ -1310,7 +1374,7 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         route = urlparse(self.path).path
-        if route not in ("/api/answer", "/api/english", "/api/module-answer", "/api/question", "/api/defense", "/api/gate", "/api/lab", "/api/review"):
+        if route not in ("/api/answer", "/api/english", "/api/module-answer", "/api/question", "/api/chat", "/api/defense", "/api/gate", "/api/lab", "/api/review"):
             self.send_json(404, {"ok": False, "message": "未知接口"})
             return
         try:
@@ -1318,6 +1382,40 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             if length <= 0 or length > 16_384:
                 raise ValueError("答案长度无效")
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            if route == "/api/chat":
+                course_id = self.safe_course_id(payload.get("course_id", "PRE0"))
+                message = str(payload.get("message", payload.get("content", ""))).strip()[:4_000]
+                if not message:
+                    raise ValueError("请先写下你想问老师的内容")
+                try:
+                    module_index = max(0, min(99, int(payload.get("module_index", 0))))
+                except (TypeError, ValueError):
+                    module_index = 0
+                module_id = str(payload.get("module_id", ""))[:80]
+                raw_recent = payload.get("recent", [])
+                recent = raw_recent[-12:] if isinstance(raw_recent, list) else []
+                reply, context = self.chat_reply(course_id, message, recent, module_id=module_id, module_index=module_index)
+                now = datetime.now().astimezone().isoformat(timespec="seconds")
+                user_record = {
+                    "timestamp": now, "course_id": course_id, "role": "user", "content": message,
+                    "module_id": module_id, "module_index": module_index, "source": "unified-classroom-chat",
+                    "teacher_review": "pending",
+                }
+                assistant_record = {
+                    "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"), "course_id": course_id,
+                    "role": "assistant", "content": reply, "module_id": module_id, "module_index": module_index,
+                    "source": "unified-classroom-chat", "assistant_mode": "local_contextual",
+                    "teacher_review": "pending", "context_snapshot": context,
+                }
+                per_course = self.memory_root / "课堂记录" / "助教聊天" / f"{course_id}.jsonl"
+                global_chat = self.memory_root / "课堂记录" / "助教聊天.jsonl"
+                self.append_jsonl(per_course, user_record)
+                self.append_jsonl(per_course, assistant_record)
+                self.append_jsonl(global_chat, user_record)
+                self.append_jsonl(global_chat, assistant_record)
+                self.update_current_position(course_id, "继续在本节助教聊天中提问；聊天记录已永久保存。", "assistant-chat")
+                self.send_json(200, {"ok": True, "message": "消息已保存，助教已立即回复。", "reply": reply, "messages": [user_record, assistant_record], "assistant_mode": "local_contextual", "persistent_path": f"课堂记录/助教聊天/{course_id}.jsonl", "review": "pending"})
+                return
             answer = str(payload.get("answer", "")).strip()
             if not answer:
                 raise ValueError("请先说出或写下一句自己的预测")
