@@ -490,10 +490,62 @@
       }));
       return {available:true, mechanism:'用户动作/输入 → 电脑状态变化 → 可观察输出', prerequisites:String(course?.prerequisites || '先完成上一节的最小复习'), invariant:'每一步可复述、可观察、可撤销；不破坏原始资料。', metric:'退出码、复现次数、解释准确度和恢复时间', failure:'路径、权限、编码、版本或误操作造成的可恢复失败', complexity:'把比喻拆成状态、事件、数据和边界', research_question:'在保持环境不变时，改变一个变量会如何影响结果？', layers, levels, labs, checkpoints, oral_defense:['哪一个前置条件最重要？为什么？','你的证据如何排除另一种解释？','最小反例是什么？','失败后如何恢复并回归？','你会怎样把本课教给下一位学习者？']};
     }
-    function staticEnglish(course) {
+    function staticEnglish(course, vocabularyRecord, grammarRecord, pronunciationAsset) {
+      // GitHub Pages has no API. Its classroom must therefore read the same
+      // auditable 590-lesson plan as the local server instead of falling back
+      // to the legacy PRE0 JSON (which used technical words too early).
       const topic = String(course?.topic_focus || 'computer science');
-      const words = [...new Set((topic.match(/[A-Za-z][A-Za-z-]*/g) || []).concat(['computer','input','process','output','result']))].slice(0,5).map((word,i)=>({word,ipa:ipaForWord(word),meaning:i===0?'本课主题词':'本课计算机词',part_of_speech:'noun',example:'The computer processes the input.',translation:'电脑处理输入的信息。'}));
-      return {course_id:courseId,title:'Computer English · '+courseId,level:'A0 → A1',stage:{id:'A0',label:'完全零基础',word_target:400,grammar_scope:'字母、词义、主语 + 动词 + 对象、短问答',reading_task:'逐词朗读并找出主语、动词和对象。',writing_task:'用本课词汇写一句最短英文。',course_index:1,total_courses:590},vocabulary_target:{new_words:words.length,review_words:5,cumulative_target:400},words,grammar:{pattern:'Subject + verb + object',explanation:'英语最小陈述句：谁 + 做什么 + 对什么做。',example:'The computer processes the input.',translation:'电脑处理输入的信息。',task:'用本课词汇改写一个短句。',mastery_check:'能解释结构、改写句子并指出边界。'},exercises:[{id:courseId+'-EN-WORD-01',type:'word_recall',prompt:'写出一个本课英文词。',expected:words[0]?.word || 'computer'},{id:courseId+'-EN-SPELL-01',type:'spelling',prompt:'独立输入 computer。',expected:'computer'},{id:courseId+'-EN-ORDER-01',type:'word_order',prompt:'把单词排成正确句子：processes / the input / The computer',expected:'The computer processes the input.'},{id:courseId+'-EN-WRITE-01',type:'short_writing',prompt:'用英文写一句与本课主题有关的短句。',expected:'The computer processes the input.'}],platform_routine:['看例句并朗读','在输入框独立回忆并提交','根据反馈重试或查看提示','完成翻译、阅读与写作并进入间隔复习']};
+      const stageLabels = {A0:'完全零基础',A1:'基础交流与技术词',A2:'连贯技术表达',B1:'工程沟通',B2:'学术技术英语',C1:'研究与批判表达',C2:'出版级表达','C2+':'计算机学术宗师'};
+      const stageTargets = {A0:400,A1:1360,A2:3360,B1:7100,B2:11900,C1:15950,C2:18830,'C2+':20000};
+      const stageRanges = {A0:[1,40],A1:[41,100],A2:[101,180],B1:[181,290],B2:[291,410],C1:[411,500],C2:[501,560],'C2+':[561,590]};
+      const planned = vocabularyRecord && typeof vocabularyRecord === 'object' ? vocabularyRecord : {};
+      const stageId = String(planned.stage || 'A0');
+      const index = Number(planned.course_index || 1);
+      const stage = {
+        id: stageId,
+        label: stageLabels[stageId] || stageId,
+        course_index: index,
+        total_courses: 590,
+        course_start: stageRanges[stageId]?.[0] || 1,
+        course_end: stageRanges[stageId]?.[1] || 590,
+        word_target: stageTargets[stageId] || 20000,
+        grammar_scope: stageId === 'A0' ? '字母、大小写、词边界、主语、be、冠词、单复数、最短问答和标点' : '与本阶段对应的语法、技术阅读、翻译和写作',
+        reading_task: stageId === 'A0' ? '逐词朗读本课英文，辨认单词边界，再找出主语和动作。' : '从本课技术短文中找出动作、对象、条件和证据。',
+        writing_task: stageId === 'A0' ? '用本课已经学过的词写一个 3–5 词短句。' : '用本课词汇写出一段清楚、可检查的技术表达。'
+      };
+      const basicMeaning = {
+        i:'我',you:'你',he:'他',she:'她',we:'我们',they:'他们',a:'一个',an:'一个（用于元音音素前）',the:'这个/特定的',this:'这个',that:'那个',is:'是/在',am:'是/在',are:'是/在',my:'我的',your:'你的',name:'名字',computer:'电脑',screen:'屏幕',key:'按键',mouse:'鼠标',file:'文件',folder:'文件夹',open:'打开',close:'关闭',click:'点击',type:'输入/打字',read:'读取/阅读',write:'写入/书写',see:'看见',go:'去',here:'这里',there:'那里',yes:'是',no:'不',one:'一',two:'二',in:'在里面',on:'在上面',and:'和',not:'不',can:'能够',do:'做',what:'什么',where:'哪里',hello:'你好',good:'好的',day:'天',it:'它',works:'工作/运行',show:'显示',input:'输入',output:'输出',data:'数据',save:'保存',run:'运行',error:'错误'
+      };
+      const examples = {
+        i:['I am here.','我在这里。'], you:['You are here.','你在这里。'], he:['He is here.','他在这里。'], she:['She is here.','她在这里。'], we:['We are here.','我们在这里。'], they:['They are here.','他们在这里。'],
+        a:['This is a computer.','这是一台电脑。'], an:['This is an input.','这是一个输入。'], the:['The computer is here.','电脑在这里。'], this:['This is a computer.','这是电脑。'], that:['That is a screen.','那是屏幕。'],
+        is:['The file is here.','文件在这里。'], am:['I am ready.','我准备好了。'], are:['We are ready.','我们准备好了。'], my:['My computer is here.','我的电脑在这里。'], your:['Your key is here.','你的按键在这里。'], name:['My name is Codex.','我的名字是 Codex。']
+      };
+      const newWords = Array.isArray(planned.new_words) ? planned.new_words.map(word=>String(word).trim().toLowerCase()).filter(Boolean) : [];
+      const reviewWords = Array.isArray(planned.review_words) ? planned.review_words.map(word=>String(word).trim().toLowerCase()).filter(Boolean) : [];
+      const routeWords = [...new Set([...newWords, ...reviewWords])];
+      const ipaItems = pronunciationAsset?.items && typeof pronunciationAsset.items === 'object' ? pronunciationAsset.items : {};
+      const wordCards = routeWords.map((word, position) => {
+        const known = basicMeaning[word] || '本课词汇（先认读、听音、拼写，再由老师确认词义）';
+        const example = examples[word] || [`We study the ${word}.`, `我们学习 ${known}。`];
+        const ipa = ipaItems[word]?.ipa || ipaForWord(word) || '';
+        return {word, ipa, meaning:known, part_of_speech:'本课词汇', example:example[0], translation:example[1], vocabulary_role:position < newWords.length ? '新词' : '复习词'};
+      });
+      const grammar = grammarRecord || {};
+      const sentence = grammar.example || 'A computer starts.';
+      const translation = grammar.translation || '电脑启动。';
+      const expectedWord = routeWords[0] || 'i';
+      const secondWord = routeWords[1] || expectedWord;
+      const exercises = [
+        {id:courseId+'-EN-LISTEN-01',type:'listening',strand:'pronunciation',prompt:'点击“朗读题目”，听本课第一个词，再把你听到的英文输入。',speak_text:expectedWord,expected:expectedWord,hint:'先听完整音，再按字母拼写；不会时可以重听。'},
+        {id:courseId+'-EN-MEANING-01',type:'meaning_recall',strand:'meaning_recall',prompt:'看到英文词 '+expectedWord+'，写出中文意思。',expected:wordCards[0]?.meaning || '',hint:'先看词形，再看它在本课短句中的位置。'},
+        {id:courseId+'-EN-SPELL-01',type:'spelling',strand:'spelling',prompt:'独立输入本课第二个词：'+secondWord,expected:secondWord,hint:'输入后检查首字母、双写字母和词尾。'},
+        {id:courseId+'-EN-GRAMMAR-01',type:'grammar',strand:'grammar',prompt:'本课语法：'+(grammar.title || grammar.lesson_focus || stage.grammar_scope)+'。请先写结构，再用自己的话解释。',expected:'',hint:[grammar.pattern,grammar.explanation,grammar.contrast].filter(Boolean).join('；'),review_mode:'teacher'},
+        {id:courseId+'-EN-TRANSLATE-01',type:'translation_en_zh',strand:'translation',prompt:'把英文翻译成中文：'+sentence,expected:translation,hint:'先找谁、做什么、对什么做。',review_mode:'teacher'},
+        {id:courseId+'-EN-WRITE-01',type:'short_writing',strand:'writing',prompt:grammar.task || stage.writing_task,expected:'',hint:'先写最短、最清楚的句子；不会的词可以从本课词卡回看。',review_mode:'teacher'},
+        {id:courseId+'-EN-ORDER-01',type:'word_order',strand:'word_order',prompt:'把词排成正确句子：'+sentence,expected:sentence,hint:'先找主语，再找动词，最后检查句号。'}
+      ];
+      return {course_id:courseId,title:'Computer English · '+courseId+' · '+stage.label,level:stageId+' · '+stage.label,stage,syllabus:{unit:planned.unit || topic,new_words:newWords,review_words:reviewWords,words:wordCards,grammar:grammar.title || grammar.lesson_focus || stage.grammar_scope,sentence,translation},vocabulary_target:{new_words:newWords.length,review_words:reviewWords.length,cumulative_target:Number(planned.cumulative_word_target || routeWords.length),route_target:stage.word_target,overall_target:20000,source:'英语课程_590课词汇计划.json（590 节、20,000 个去重词形）'},words:wordCards,grammar:{pattern:grammar.pattern || '先建立最短句结构',explanation:grammar.explanation || stage.grammar_scope,example:sentence,translation,contrast:grammar.contrast || '',task:grammar.task || stage.writing_task,mastery_check:grammar.mastery_check || '能认读、拼写并独立写出本课结构。',topics:[]},exercises,platform_routine:['先看本课新词，再看复习词','点击每个词的朗读按钮，听音并跟读','在输入框独立认词、拼写、练语序和翻译','提交后查看校对，错误进入间隔复习']};
     }
     function staticLesson(course) {
       const title = String(course?.title || courseId);
@@ -521,22 +573,44 @@
       const course = courses.find(item=>String(item.id)===id) || {id,title:id,topic_focus:'computer science'};
       const lessonFile = id.replace(/[^A-Za-z0-9-]/g,'')+'-第一段.json';
       const englishFile = id.replace(/[^A-Za-z0-9-]/g,'')+'-英语.json';
-      const [lessonRaw, englishRaw] = await Promise.all([fetchStaticJson(lessonFile), fetchStaticJson(englishFile)]);
+      const [lessonRaw, englishRaw, vocabularyRaw, grammarRaw, pronunciationRaw] = await Promise.all([
+        fetchStaticJson(lessonFile),
+        fetchStaticJson(englishFile),
+        fetchStaticJson('英语课程_590课词汇计划.json'),
+        fetchStaticJson('英语语法课程_590课.json'),
+        fetchStaticJson('英语发音_20k.json')
+      ]);
+      const vocabularyRecord = Array.isArray(vocabularyRaw?.lessons) ? vocabularyRaw.lessons.find(item=>String(item.course_id)===id) : null;
+      const grammarRecord = Array.isArray(grammarRaw?.lessons) ? grammarRaw.lessons.find(item=>String(item.course_id)===id) : null;
       const contract = staticContract(course);
       const lesson = Object.assign(staticLesson(course), lessonRaw || {});
       lesson.course_id = id; lesson.contract = contract;
-      const english = Object.assign(staticEnglish(course), englishRaw || {});
-      english.course_id = id; english.stage = english.stage || staticEnglish(course).stage;
+      const english = staticEnglish(course, vocabularyRecord, grammarRecord, pronunciationRaw);
+      // Only an explicitly upgraded lesson may supplement the canonical route.
+      // Legacy PRE0-英语.json must never replace the zero-to-academic word plan.
+      if (englishRaw?.syllabus_version === 'v2') {
+        english.title = englishRaw.title || english.title;
+        english.platform_routine = englishRaw.platform_routine || english.platform_routine;
+      }
+      english.course_id = id;
       const index = Math.max(0, courses.findIndex(item=>String(item.id)===id));
       return {lesson, english, contract, navigation:{course_id:id,course_index:index+1,total_courses:courses.length || 590,previous:index>0?{id:courses[index-1].id,title:courses[index-1].title,index}:null,next:index+1<courses.length?{id:courses[index+1].id,title:courses[index+1].title,index:index+2}:null}};
     }
     function localAssistantReply(question) {
       const text = String(question || '').toLowerCase();
-      if (text.includes('输入') || text.includes('input') || text.includes('处理') || text.includes('process') || text.includes('输出') || text.includes('output')) return '先拆成三步：输入是电脑收到的东西，处理是电脑根据规则改变状态，输出是你能观察到的结果。请写一个自己的例子：输入是什么 → 发生了什么变化 → 看到了什么输出。';
-      if (text.includes('英语') || text.includes('英文') || text.includes('单词') || text.includes('语法') || text.includes('english')) return '本课英语先服务于计算机理解。选一个本课术语，写出英文、中文意思和一个短句，再用 Subject + verb + object 造句；我会先检查拼写，再检查语序。';
-      if (text.includes('视频') || text.includes('youtube') || text.includes('链接')) return '视频只负责建立直觉。打开官方资源后回到课堂完成一个回答或实验；如果播放器打不开，请贴出页面标题或错误文字，我会给你文字资料替代路径。';
-      if (text.includes('为什么') || text.includes('不懂') || text.includes('不会') || text.includes('区别') || text.includes('how') || text.includes('why')) return '先不用追求术语。请分别写：你看到了什么现象？你猜电脑发生了什么？哪一步最不明白？助教会从你的原句继续追问。';
-      return '问题已收到。请补充正在做的模块、看到的具体现象或希望得到的结果中的任意一点；只写一句最简单的话也可以，助教会从这句话开始拆解。';
+      const courseTitle = String(lesson?.title || courseId).split(' / ')[0];
+      const stage = englishLesson?.stage || {};
+      const cards = (englishLesson?.words || []).slice(0, 5);
+      const wordLine = cards.map(item => item.word+' = '+item.meaning).join('；');
+      const grammar = englishLesson?.grammar || {};
+      const context = '你现在在 '+courseId+'《'+courseTitle+'》，英语阶段是 '+(stage.id || 'A0')+'。';
+      if (text.includes('单词') || text.includes('词汇') || text.includes('英语') || text.includes('英文') || text.includes('语法') || text.includes('english') || text.includes('word') || text.includes('grammar')) {
+        return context+'本课真正按 590 节词汇计划学习，不会跳到技术词。当前词卡是：'+(wordLine || '请先载入本课词卡')+'。先选一个词，按“看词形 → 听朗读 → 说中文 → 键盘拼写 → 用例句改写”完成；本课句型是“'+(grammar.pattern || '先找主语和动词')+'”。你可以直接回复一个词，我会逐字母和语序帮你校对。';
+      }
+      if (text.includes('输入') || text.includes('input') || text.includes('处理') || text.includes('process') || text.includes('输出') || text.includes('output')) return context+'先拆成三步：输入是电脑收到的东西，处理是电脑根据规则改变状态，输出是你能观察到的结果。请结合本课主题写：输入是什么 → 发生了什么变化 → 看到了什么输出。你写回来后，我会逐句指出概念和英语表达哪里需要改。';
+      if (text.includes('视频') || text.includes('youtube') || text.includes('链接')) return context+'视频只负责建立直觉。打开官方资源后回到本课完成一个回答或实验；如果播放器打不开，请贴出页面标题或错误文字，我会用本课文字讲义继续带你学。';
+      if (text.includes('为什么') || text.includes('不懂') || text.includes('不会') || text.includes('区别') || text.includes('how') || text.includes('why')) return context+'我们只解决一个小台阶：你看到的现象是什么？你猜电脑发生了什么？哪一步最不明白？请只回答其中一项，助教会从你的原句继续追问，不会让你一次跳很多步。';
+      return context+'问题已经保存到本节记录。为了马上开始真正的逐步辅导，请补充“正在做的模块 / 看到的现象 / 想得到的结果”中的任意一项；只写一句最简单的话也可以。';
     }
     function activeModuleContext() {
       const active = document.querySelector('[data-module-target].active');
