@@ -175,12 +175,12 @@
     {
       "id": "VIDEO-PARADIGM-01",
       "title": "Structure and Interpretation of Computer Programs",
-      "provider": "MIT Press",
+      "provider": "MIT OpenCourseWare",
       "kind": "official programming paradigms resource",
       "description": "范式轨道的抽象、组合、解释和程序设计思想入口。视频或章节只作背景，必须完成自己的实现和证明。",
       "duration": "按页面选择片段",
       "captions": "English; page text is available",
-      "watch_url": "https://mitpress.mit.edu/9780262510875/structure-and-interpretation-of-computer-programs/",
+      "watch_url": "https://ocw.mit.edu/courses/6-001-structure-and-interpretation-of-computer-programs-spring-2005/",
       "embed_url": "",
       "local_path": "",
       "categories": ["paradigm"]
