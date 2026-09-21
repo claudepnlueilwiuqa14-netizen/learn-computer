@@ -162,6 +162,10 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         def count(folder: str) -> int:
             path = history_root / folder / f"{course_id}.jsonl"
             return len(self.read_tail(path, 10_000))
+        def latest(folder: str, field: str) -> str:
+            path = history_root / folder / f"{course_id}.jsonl"
+            items = self.read_tail(path, 1)
+            return str(items[-1].get(field, "")).strip()[:240] if items else ""
         course = self.course_record(course_id)
         contract = self.course_contract(course_id)
         return {
@@ -175,6 +179,9 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             "modules": count("模块回答"),
             "gates": count("关卡验收"),
             "labs": count("Lab验收"),
+            "latest_answer": latest("课堂回答", "answer"),
+            "latest_english": latest("英语练习", "answer"),
+            "latest_module": latest("模块回答", "answer"),
             "invariant": str(contract.get("Invariant", "每个结论都要对应可观察证据")),
         }
 
@@ -192,6 +199,12 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             prefix += "。"
         if previous:
             prefix += "我也记得你刚才提到的：“" + previous[-1][:120] + "”。"
+        if context["latest_answer"]:
+            prefix += "你最近保存的计算机回答是：“" + context["latest_answer"] + "”。我们会从这句继续纠正。"
+        elif context["latest_module"]:
+            prefix += "你最近保存的模块回答是：“" + context["latest_module"] + "”。我们会从这句继续纠正。"
+        if context["latest_english"]:
+            prefix += "最近的英语练习原句也已保留，接下来会一起检查拼写、语序和语法。"
         progress = (f"本节已保存：概念回答 {context['answers']} 条、英语练习 {context['english']} 条、"
                     f"模块回答 {context['modules']} 条、关卡 {context['gates']} 条、Lab {context['labs']} 条。")
         return prefix + reply + "\n\n" + progress, context
