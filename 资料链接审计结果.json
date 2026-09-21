@@ -1,0 +1,52 @@
+{
+  "audit_date": "2026-09-22",
+  "source": "权威资料目录与复核计划.md",
+  "unique_urls": 71,
+  "method": "HEAD first, GET fallback, follow redirects, read-only requests",
+  "summary": {
+    "http_200": 65,
+    "http_308_redirect": 4,
+    "http_403_restricted": 1,
+    "network_error": 1
+  },
+  "exceptions": [
+    {
+      "url": "https://15445.courses.cs.cmu.edu/",
+      "status": 308,
+      "handling": "跟随重定向到 CMU 15-445 当前学期入口后使用。"
+    },
+    {
+      "url": "https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html",
+      "status": 403,
+      "handling": "保留原链接供用户浏览器复核；课程同时提供 Intel 官方工具/架构入口，不绕过访问控制。"
+    },
+    {
+      "url": "https://www.gnu.org/software/bash/manual/",
+      "status": "network_error",
+      "handling": "本轮客户端超时；保留 GNU 官方入口，必要时使用本地系统手册复核。"
+    },
+    {
+      "url": "https://owasp.org/www-project-application-security-verification-standard/",
+      "status": 308,
+      "handling": "跟随 HTTPS 重定向后使用。"
+    },
+    {
+      "url": "https://owasp.org/www-project-top-ten/",
+      "status": 308,
+      "handling": "跟随 HTTPS 重定向后使用。"
+    },
+    {
+      "url": "https://owasp.org/www-project-web-security-testing-guide/",
+      "status": 308,
+      "handling": "跟随 HTTPS 重定向后使用。"
+    }
+  ],
+  "youtube": {
+    "checked_count": 10,
+    "http_200_count": 10,
+    "removed_dead_guesses": 3,
+    "watch_only": true,
+    "embed_policy": "不默认嵌入，避免地区限制、版权策略和播放器变化；课堂保留官方观看链接。"
+  },
+  "interpretation": "可达性不等于资料已阅读或学习者已掌握。课程仍要求章节、版本、实验输出、测试证据和老师验收。"
+}
