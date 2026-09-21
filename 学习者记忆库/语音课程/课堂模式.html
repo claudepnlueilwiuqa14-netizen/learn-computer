@@ -438,6 +438,92 @@
         return {ok:false, offline:true, message:error.message};
       }
     }
+    async function fetchStaticJson(path) {
+      const candidates = [path];
+      // The local classroom server is rooted at this folder, while GitHub Pages
+      // serves the same file one directory above it. Try both layouts.
+      if (path.startsWith('../')) candidates.push(path.slice(3));
+      for (const candidate of candidates) {
+        try {
+          const response = await fetch(candidate, {cache:'no-store'});
+          if (response.ok) return await response.json();
+        } catch (_) {}
+      }
+      return null;
+    }
+    const ipaForWord = word => ({
+      computer:'/kəmˈpjuːtə/', input:'/ˈɪnpʊt/', process:'/ˈprəʊses/', output:'/ˈaʊtpʊt/',
+      memory:'/ˈmeməri/', storage:'/ˈstɔːrɪdʒ/', result:'/rɪˈzʌlt/', screen:'/skriːn/',
+      keyboard:'/ˈkiːbɔːd/', device:'/dɪˈvaɪs/', instruction:'/ɪnˈstrʌkʃən/'
+    })[String(word || '').toLowerCase()] || '';
+    function staticContract(course) {
+      const topic = String(course?.topic_focus || course?.title || courseId);
+      const names = ['目标与成功标准','前置检查','最浅比喻','动手验证','核心原理','深挖与测量','架构取舍','安全边界','证据验收','失败恢复','迁移与下一步'];
+      const layers = names.map((name, i) => ({
+        id:'module-'+String(i+1).padStart(2,'0'), name:(i+1)+' · '+name,
+        beginner:'先用一句最简单的话理解“'+topic+'”，再做一个可以看到结果的小动作。',
+        teaching:'本模块围绕“'+topic+'”展开。请把输入、状态变化、输出和边界分别说清楚。',
+        teacher_explanation:'老师讲解：先看一个最小例子，再把你的观察写下来；不会时只完成当前这一小步。',
+        action:['写下你认为的成功标准。','说出一个前置条件并检查它。','画出生活例子与真实电脑对象的对应。','在自己的安全目录完成最小操作。','解释为什么会出现这个结果。','只改一个条件并比较三次。','比较两种方案的取舍。','写出允许、禁止和停止条件。','整理可复现证据链。','记录一个可恢复的失败并修复。','写出下一节依赖和一个研究问题。'][i],
+        evidence:'一段自己的解释 + 一个可观察结果 + 仍未验证的边界',
+      }));
+      const levels = ['用自己的话复述本课核心事件链并指出输入和输出。','只改变一个条件，比较结果并写出原因。','把本课接到前置知识，画出依赖关系。','在安全范围制造小故障，记录现象、修复和回归。','提出一个可证伪研究问题，交付证据和适用边界。'].map((text,i)=>({
+        id:'Lv'+(i+1), text:'Lv'+(i+1)+' · '+text,
+        teacher_explanation:'老师讲解：先读步骤，再做一个小动作，最后把你真正看到的证据写进回答框。',
+        steps:['读懂这一关的目标，不懂就问本节助教。','在自己的学习目录或隔离环境完成动作。','记录输入、输出、解释和没有验证的部分。','点击提交，原答案会永久保存并等待老师批改。']
+      }));
+      const labs = ['最小机制追踪','单变量对照','核心机制实现','故障注入与恢复','研究与教学'].map((name,i)=>({
+        id:'Lab '+(i+1), name:name, teacher_explanation:'老师讲解：只在自己的文件和隔离环境操作；每一步先观察再继续。',
+        steps:['准备临时目录和输入。','执行一次最小实验。','保存原始输出、退出码和环境信息。','写出结论、限制和清理动作。'],
+        input:'围绕 '+topic+' 设计一个可撤销的最小实验。', expected:'结果可观察、可解释、可复现。', failure:'记录错误、停止条件和恢复方式。', metric:'步骤耗时、退出码、复现次数和证据完整度'
+      }));
+      const checkpoints = ['复述与建模','预测与因果','机制与证明','破坏与恢复','迁移与教学'].map((stage,i)=>({
+        stage:'C'+(i+1)+' · '+stage, teacher_explanation:'老师讲解：先按步骤回答，再贴出能证明你说法的证据。',
+        steps:['用自己的话写，不要先复制术语。','给出一个具体输入和可观察输出。','说明你的原因以及一个可能的反例。','写出下一步如何验证。'],
+        prompt:'请用自己的话说明“'+topic+'”在本阶段的问题、证据和边界。', deliverable:'模型图或实验记录 + 关键证据', gate:'每个重要结论都能指向观察、测试、日志或数据。'
+      }));
+      return {available:true, mechanism:'用户动作/输入 → 电脑状态变化 → 可观察输出', prerequisites:String(course?.prerequisites || '先完成上一节的最小复习'), invariant:'每一步可复述、可观察、可撤销；不破坏原始资料。', metric:'退出码、复现次数、解释准确度和恢复时间', failure:'路径、权限、编码、版本或误操作造成的可恢复失败', complexity:'把比喻拆成状态、事件、数据和边界', research_question:'在保持环境不变时，改变一个变量会如何影响结果？', layers, levels, labs, checkpoints, oral_defense:['哪一个前置条件最重要？为什么？','你的证据如何排除另一种解释？','最小反例是什么？','失败后如何恢复并回归？','你会怎样把本课教给下一位学习者？']};
+    }
+    function staticEnglish(course) {
+      const topic = String(course?.topic_focus || 'computer science');
+      const words = [...new Set((topic.match(/[A-Za-z][A-Za-z-]*/g) || []).concat(['computer','input','process','output','result']))].slice(0,5).map((word,i)=>({word,ipa:ipaForWord(word),meaning:i===0?'本课主题词':'本课计算机词',part_of_speech:'noun',example:'The computer processes the input.',translation:'电脑处理输入的信息。'}));
+      return {course_id:courseId,title:'Computer English · '+courseId,level:'A0 → A1',stage:{id:'A0',label:'完全零基础',word_target:400,grammar_scope:'字母、词义、主语 + 动词 + 对象、短问答',reading_task:'逐词朗读并找出主语、动词和对象。',writing_task:'用本课词汇写一句最短英文。',course_index:1,total_courses:590},vocabulary_target:{new_words:words.length,review_words:5,cumulative_target:400},words,grammar:{pattern:'Subject + verb + object',explanation:'英语最小陈述句：谁 + 做什么 + 对什么做。',example:'The computer processes the input.',translation:'电脑处理输入的信息。',task:'用本课词汇改写一个短句。',mastery_check:'能解释结构、改写句子并指出边界。'},exercises:[{id:courseId+'-EN-WORD-01',type:'word_recall',prompt:'写出一个本课英文词。',expected:words[0]?.word || 'computer'},{id:courseId+'-EN-SPELL-01',type:'spelling',prompt:'独立输入 computer。',expected:'computer'},{id:courseId+'-EN-ORDER-01',type:'word_order',prompt:'把单词排成正确句子：processes / the input / The computer',expected:'The computer processes the input.'},{id:courseId+'-EN-WRITE-01',type:'short_writing',prompt:'用英文写一句与本课主题有关的短句。',expected:'The computer processes the input.'}],platform_routine:['看例句并朗读','在输入框独立回忆并提交','根据反馈重试或查看提示','完成翻译、阅读与写作并进入间隔复习']};
+    }
+    function staticLesson(course) {
+      const title = String(course?.title || courseId);
+      const topic = String(course?.topic_focus || title);
+      const turns = [
+        ['en','Hello. Welcome to lesson '+courseId+'. We will learn '+topic+' step by step.'],
+        ['zh','你好，欢迎来到第 '+courseId+' 节课。我们会一步一步学习“'+topic+'”。'],
+        ['en','First, look for an input, a change of state, and an observable output.'],
+        ['zh','先找出输入、状态变化和可以观察到的输出。'],
+        ['en','Do one small action in your own safe learning environment and record what you see.'],
+        ['zh','请在自己的安全学习环境里做一个小动作，并记录你看到的现象。'],
+        ['en','Pause and predict: what will happen, and what evidence will show that you are right?'],
+        ['zh','现在暂停并预测：接下来会发生什么？什么证据能证明你的预测？'],
+        ['en','Use the English words in this lesson to write one short sentence.'],
+        ['zh','用本课英语词汇写出一个最短句子。'],
+        ['en','Your first win is a clear explanation that another learner can reproduce.'],
+        ['zh','今天的第一个胜利，是写出别人可以复现的清楚解释。'],
+      ].map(item=>({language:item[0],text:item[1]}));
+      const contract = staticContract(course);
+      return {lesson_id:courseId+'-static-01',course_id:courseId,title:title+' / '+topic,turns,question_turn_index:7,question_prompt:'Please pause and predict: what is the input, the process, and the observable output?\n请暂停并预测：什么是输入、处理和可观察的输出？',contract};
+    }
+    async function loadStaticFallback(id) {
+      const matrix = await fetchStaticJson('../掌握矩阵.json');
+      const courses = Array.isArray(matrix) ? matrix : (matrix?.courses || []);
+      const course = courses.find(item=>String(item.id)===id) || {id,title:id,topic_focus:'computer science'};
+      const lessonFile = id.replace(/[^A-Za-z0-9-]/g,'')+'-第一段.json';
+      const englishFile = id.replace(/[^A-Za-z0-9-]/g,'')+'-英语.json';
+      const [lessonRaw, englishRaw] = await Promise.all([fetchStaticJson(lessonFile), fetchStaticJson(englishFile)]);
+      const contract = staticContract(course);
+      const lesson = Object.assign(staticLesson(course), lessonRaw || {});
+      lesson.course_id = id; lesson.contract = contract;
+      const english = Object.assign(staticEnglish(course), englishRaw || {});
+      english.course_id = id; english.stage = english.stage || staticEnglish(course).stage;
+      const index = Math.max(0, courses.findIndex(item=>String(item.id)===id));
+      return {lesson, english, contract, navigation:{course_id:id,course_index:index+1,total_courses:courses.length || 590,previous:index>0?{id:courses[index-1].id,title:courses[index-1].title,index}:null,next:index+1<courses.length?{id:courses[index+1].id,title:courses[index+1].title,index:index+2}:null}};
+    }
     function localAssistantReply(question) {
       const text = String(question || '').toLowerCase();
       if (text.includes('输入') || text.includes('input') || text.includes('处理') || text.includes('process') || text.includes('输出') || text.includes('output')) return '先拆成三步：输入是电脑收到的东西，处理是电脑根据规则改变状态，输出是你能观察到的结果。请写一个自己的例子：输入是什么 → 发生了什么变化 → 看到了什么输出。';
@@ -562,7 +648,7 @@
       $('roadmapWriting').textContent = stage.writing_task || '写一句与本课概念有关的英文。';
       const stageIds = ['A0','A1','A2','B1','B2','C1','C2','C2+']; const bar = $('stageBar'); bar.innerHTML = stageIds.map(id=>'<i class="'+(id===stage.id?'active':'')+'" title="'+id+'"></i>').join('');
       const words = englishLesson.words || []; const grid = $('wordGrid'); grid.innerHTML = '';
-      words.forEach(item => { const card = document.createElement('article'); card.className='word-card'; card.innerHTML='<b></b><span class="ipa"></span><span class="meaning"></span><span class="pos"></span><p></p><em></em><div class="word-actions"><button type="button" class="word-speak">朗读单词</button><button type="button" class="word-example-speak">朗读例句</button></div>'; card.querySelector('b').textContent=item.word; card.querySelector('.ipa').textContent=item.ipa || '点击朗读按钮听音'; card.querySelector('.meaning').textContent=item.meaning; card.querySelector('.pos').textContent=item.part_of_speech || ''; card.querySelector('p').textContent=item.example || ''; card.querySelector('em').textContent=item.translation || ''; card.title='点击朗读英文单词或例句'; card.querySelector('.word-speak').addEventListener('click',(event)=>{event.stopPropagation(); speakText(item.word, 'en-GB');}); card.querySelector('.word-example-speak').addEventListener('click',(event)=>{event.stopPropagation(); speakText(item.example || item.word, 'en-GB');}); card.addEventListener('click',()=>speakText(item.word, 'en-GB')); grid.appendChild(card); });
+      words.forEach(item => { const card = document.createElement('article'); card.className='word-card'; card.innerHTML='<b></b><span class="ipa"></span><span class="meaning"></span><span class="pos"></span><p></p><em></em><div class="word-actions"><button type="button" class="word-speak">朗读单词</button><button type="button" class="word-example-speak">朗读例句</button></div>'; card.querySelector('b').textContent=item.word; card.querySelector('.ipa').textContent=item.ipa || ipaForWord(item.word) || '点击朗读按钮听音'; card.querySelector('.meaning').textContent=item.meaning; card.querySelector('.pos').textContent=item.part_of_speech || ''; card.querySelector('p').textContent=item.example || ''; card.querySelector('em').textContent=item.translation || ''; card.title='点击朗读英文单词或例句'; card.querySelector('.word-speak').addEventListener('click',(event)=>{event.stopPropagation(); speakText(item.word, 'en-GB');}); card.querySelector('.word-example-speak').addEventListener('click',(event)=>{event.stopPropagation(); speakText(item.example || item.word, 'en-GB');}); card.addEventListener('click',()=>speakText(item.word, 'en-GB')); grid.appendChild(card); });
       const grammar = englishLesson.grammar || {}; $('grammarPattern').textContent=grammar.pattern || 'Subject + verb + object'; $('grammarExplanation').textContent=grammar.explanation || ''; $('grammarExample').textContent=(grammar.example || '')+' · '+(grammar.translation || ''); $('grammarContrast').textContent=grammar.contrast || '先理解主语、动词和对象的边界。'; $('grammarTask').textContent=grammar.task || '用本课词汇改写一个短句。'; $('grammarMastery').textContent=grammar.mastery_check || '能解释结构、改写句子并指出边界。'; const topicTitles=(grammar.topics||[]).map(item=>item.title || item.id).filter(Boolean); $('grammarTopics').textContent=topicTitles.length ? topicTitles.join(' · ') : '本课主语法主题';
       const routine=englishLesson.platform_routine || englishLesson.practice_path || [];
       $('platformRoutine').textContent=(Array.isArray(routine)?routine:[routine]).filter(Boolean).join(' → ') || '看例句 → 键盘回忆 → 即时反馈 → 重试/提示 → 翻译、阅读与写作 → 间隔复习';
@@ -870,12 +956,16 @@
     }
     async function loadClassroom() {
       try {
-        const query = encodeURIComponent(courseId); const requestEntries=[['/api/lesson?course_id='+query,'lesson'],['/api/state','state'],['/api/english?course_id='+query,'english'],['/api/history?course_id='+query,'history'],['/api/navigation?course_id='+query,'navigation'],['/api/videos?course_id='+query,'videos'],['/api/chat?course_id='+query,'chat']]; const payloads=await Promise.all(requestEntries.map(([url,key])=>fetchCachedJson(url,key))); const [lessonPayload,statePayload,englishPayload,historyPayload,navigationPayload,videosPayload,chatPayload]=payloads; const offlineUsed=payloads.some(payload=>payload?.offline);
-        if (navigationPayload.ok && navigationPayload.navigation) navigation=navigationPayload.navigation;
+        const query = encodeURIComponent(courseId); const requestEntries=[['/api/lesson?course_id='+query,'lesson'],['/api/state','state'],['/api/english?course_id='+query,'english'],['/api/history?course_id='+query,'history'],['/api/navigation?course_id='+query,'navigation'],['/api/videos?course_id='+query,'videos'],['/api/chat?course_id='+query,'chat']]; const payloads=await Promise.all(requestEntries.map(([url,key])=>fetchCachedJson(url,key))); const [lessonPayload,statePayload,englishPayload,historyPayload,navigationPayload,videosPayload,chatPayload]=payloads; const offlineUsed=payloads.some(payload=>payload?.offline); const staticFallback=(!lessonPayload.ok || !englishPayload.ok || !navigationPayload.ok) ? await loadStaticFallback(courseId) : null;
+        if (navigationPayload.ok && navigationPayload.navigation) navigation=navigationPayload.navigation; else if (staticFallback?.navigation) navigation=staticFallback.navigation;
         if (lessonPayload.ok) { lesson=lessonPayload.lesson; turns=buildTurns(lesson.turns || []); renderTranscript(); renderLessonHeader(); renderContract(lesson.contract || {}); $('courseCount').textContent=statePayload.state?.summary?.courses || 590; const gates=statePayload.state?.summary?.learner_gates; const labs=statePayload.state?.summary?.learner_labs; if(gates) $('gateCount').textContent=(gates.passed || 0)+'/'+(gates.total || 2950); if(labs) $('labCount').textContent=(labs.passed || 0)+'/'+(labs.total || 2950); $('voiceNote').textContent=(courseId==='PRE0'?'声音：本地课堂音频 · 英语先讲，中文紧跟':'声音：浏览器语音回退 · 英语先讲，中文紧跟 · 可继续替换为云端声线'); }
+        else if (staticFallback?.lesson) { lesson=staticFallback.lesson; turns=buildTurns(lesson.turns || []); renderTranscript(); renderLessonHeader(); renderContract(lesson.contract || {}); $('courseCount').textContent=590; $('voiceNote').textContent='声音：静态课程回退 · 英语先讲，中文紧跟 · 连接本地课堂后可保存记录'; }
         if (englishPayload.ok) { englishLesson=englishPayload.lesson; renderEnglish(); }
+        else if (staticFallback?.english) { englishLesson=staticFallback.english; renderEnglish(); }
         if (historyPayload.ok) { submittedEnglishIds=new Set((historyPayload.english || []).map(item=>String(item.exercise_id || '')).filter(Boolean)); (historyPayload.english || []).forEach(item=>{const id=String(item.exercise_id || '');if(!id)return;const current=englishExerciseState[id] || {};englishExerciseState[id]=Object.assign({},current,{submitted:true,answer:current.answer || item.answer || '',feedback:current.feedback || (item.review_mode==='teacher'?'答案已进入老师批改队列。':(item.correct?'答案与目标一致。':'已保存，请根据反馈重试。')),attempt:Math.max(Number(current.attempt || 0),Number(item.attempt || 0))});}); (historyPayload.modules || []).forEach(item=>{const id=String(item.module_id || '');const language=String(item.language || 'zh');if(!id)return;const key=id+'-'+language;moduleAnswerState[key]=Object.assign({},moduleAnswerState[key],{submitted:true,answer:moduleAnswerState[key]?.answer || item.answer || '',feedback:moduleAnswerState[key]?.feedback || '已保存，等待老师批改',score:item.auto_screen?.score});}); (historyPayload.defense || []).forEach(item=>{const id=String(item.defense_id || '');if(!id)return;defenseAnswerState[id]=Object.assign({},defenseAnswerState[id],{submitted:true,answer:defenseAnswerState[id]?.answer || item.answer || '',feedback:defenseAnswerState[id]?.feedback || '已提交并永久锁定；可用“上一题”回看。'});}); saveEnglishProgress(); saveModuleProgress(); saveDefenseProgress(); renderExercise(); renderEnglishModuleLessons(); renderIntegratedModules(); renderDefense(); }
+        else { submittedGateIds=new Set(); $('historySummary').textContent='当前为静态课程回退：课程内容完整可看；连接本地课堂后会恢复本节永久学习记录。'; renderFlowNavigation(); }
         if (videosPayload.ok) renderVideos(videosPayload);
+        else renderVideos({videos:{enabled:false,items:[]}});
         if (chatPayload.ok) loadAssistantChat(chatPayload);
         else loadAssistantChat({messages: []});
         if (historyPayload.ok) { submittedGateIds=new Set((historyPayload.gates || []).map(item=>String(item.item_id || '')).filter(item=>/^Lv[1-5]$/.test(item))); const answerCount=historyPayload.answers?.length || 0; const englishCount=historyPayload.english?.length || 0; const latest=historyPayload.answers?.at(-1)?.answer || ''; $('historySummary').innerHTML='本节已有 <strong>'+answerCount+'</strong> 次概念回答、<strong>'+englishCount+'</strong> 次英语练习记录和 <strong>'+submittedGateIds.size+'</strong> 个关卡证据提交，全部等待老师验收。'+(latest ? ' 最近一次概念回答已保存，下一次课堂会先从你的原句纠正本课概念和英语。' : ' 你提交后，老师会把原句、错误类型和下一次复习点一起保存。'); renderFlowNavigation(); const savedAnswer=localStorage.getItem(answerKey) || latest; const savedPhase=localStorage.getItem(phaseKey); if(savedAnswer && savedPhase !== 'lesson-complete'){index=Number(lesson.question_turn_index ?? 7);pausedForQuestion=true;renderTurn(index);$('answer').value=savedAnswer;$('englishHint').textContent=lesson.english_coaching || '英文可以先从 Subject + verb + object 开始写。';$('englishHint').classList.add('show');$('questionBox').classList.add('show');$('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;$('startBtn').disabled=true;$('replayBtn').disabled=false;setTask('listen','done');setTask('predict','done');setTask('answer','done');setTask('recall','active');setStatus('已恢复到上次回答后 · 点击题目下方继续下一段',false);} }
