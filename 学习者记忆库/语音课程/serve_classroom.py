@@ -120,6 +120,37 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
     def course_record(self, course_id: str) -> dict:
         return next((item for item in self.load_courses() if item.get("id") == course_id), {"id": course_id, "title": course_id, "topic_focus": "computer science"})
 
+    def assistant_reply(self, course_id: str, question: str) -> str:
+        """Give an immediate, explainable reply without pretending to be a cloud model."""
+        course = self.course_record(course_id)
+        title = str(course.get("title", course_id))
+        topic = str(course.get("topic_focus", title))
+        contract = self.course_contract(course_id)
+        mechanism = str(contract.get("Mechanism", ""))
+        invariant = str(contract.get("Invariant", ""))
+        q = " ".join(str(question or "").lower().split())
+        if any(term in q for term in ("输入", "input", "处理", "process", "输出", "output")):
+            return (f"先把问题缩成三步：输入是电脑收到的东西，处理是电脑根据规则改变状态，输出是你能观察到的结果。"
+                    f"在本课《{title}》里，请写一个自己的例子：输入是什么 → 发生了什么变化 → 你看到了什么输出。"
+                    f"如果你愿意，把这三段贴回来，我会继续逐句帮你检查。")
+        if any(term in q for term in ("英语", "英文", "单词", "语法", "english", "word", "grammar")):
+            return (f"本课英语先服务于计算机理解。先选一个本课术语，按“英文单词 → 中文意思 → 例句”写出来，"
+                    f"再用 Subject + verb + object 写一句话。不要一次写长句；我会先检查拼写，再检查语序和语法。")
+        if any(term in q for term in ("视频", "youtube", "链接", "播放")):
+            return ("视频只是建立直觉，打开官方资源后请回到课堂完成一个回答或实验。"
+                    "如果播放器打不开，把页面标题或错误文字贴给我，我会给你文字资料替代路径。")
+        if any(term in q for term in ("实验", "lab", "证据", "命令", "报错", "错误", "失败", "error")):
+            return (f"先不要反复重试。请按“你做了什么 / 原始输出 / 退出码或错误文字 / 你期待什么”四行贴出。"
+                    f"本课的机制是：{mechanism or '先观察输入、状态变化和输出'}。"
+                    f"验收时还要说明限制或清理步骤。")
+        if any(term in q for term in ("为什么", "不懂", "不会", "区别", "意思", "how", "why", "what")):
+            return (f"你现在学习的是《{title}》，主题是“{topic}”。我们先不追求术语，先回答一个小问题："
+                    f"你看到的现象是什么？你认为电脑发生了什么？哪一步最不明白？"
+                    f"本课要守住的核心不变量是：{invariant or '每个结论都要对应一个可观察证据'}。")
+        return ("我已经收到问题并按当前课程保存。为了马上帮你拆解，请补充三点中的任意一点："
+                "你正在做的模块、看到的具体现象、或者你希望得到的结果。"
+                "你也可以只写一句最简单的话，助教会从这句话开始追问。")
+
     def course_navigation(self, course_id: str) -> dict:
         """Return stable previous/next course links without changing learner state."""
         courses = self.load_courses()
@@ -1187,8 +1218,10 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 self.send_json(400, {"ok": False, "message": "十课报告参数无效"})
             return
         if route == "/api/questions":
+            course_id = self.course_id_from_query(parsed)
             questions_path = self.memory_root / "课堂记录" / "助教问题.jsonl"
-            self.send_json(200, {"ok": True, "questions": self.read_tail(questions_path, 50)})
+            questions = [item for item in self.read_tail(questions_path, 200) if item.get("course_id") == course_id]
+            self.send_json(200, {"ok": True, "course_id": course_id, "questions": questions[-50:]})
             return
         if route == "/api/review":
             queue_path = self.memory_root / "复习队列.json"
@@ -1364,17 +1397,20 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 return
             if route == "/api/question":
                 course_id = self.safe_course_id(payload.get("course_id", "PRE0"))
+                assistant_reply = self.assistant_reply(course_id, answer)
                 record = {
                     "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
                     "course_id": course_id,
                     "question": answer,
                     "source": "learner-assistant-inbox",
+                    "assistant_mode": "local_contextual",
+                    "assistant_reply": assistant_reply,
                     "teacher_review": "pending",
-                    "answered": False,
+                    "answered": True,
                 }
                 target = self.memory_root / "课堂记录" / "助教问题.jsonl"
                 self.append_jsonl(target, record)
-                self.send_json(200, {"ok": True, "message": "问题已保存到助教收件箱，下一次课堂会从这里接着回答。", "review": "pending"})
+                self.send_json(200, {"ok": True, "message": "问题已保存，助教已即时回复；同时进入老师复核队列。", "reply": assistant_reply, "record": record, "review": "pending", "assistant_mode": "local_contextual"})
                 return
             if route == "/api/defense":
                 course_id = self.safe_course_id(payload.get("course_id", "PRE0"))

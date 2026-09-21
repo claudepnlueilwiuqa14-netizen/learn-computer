@@ -164,6 +164,22 @@
     .history-panel h2 { margin:0 0 8px; font-size:16px; }
     .history-panel p { margin:0; color:var(--muted); font-size:13px; line-height:1.6; }
     .history-panel strong { color:var(--ink); }
+    .assistant-inbox { margin-top:18px; padding:20px; background:var(--paper); border:1px solid #b8cfe4; border-radius:8px; }
+    .assistant-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+    .assistant-head h2 { margin:0; font-size:18px; }
+    .assistant-head p { margin:5px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
+    .assistant-badge { flex:0 0 auto; color:var(--green); background:#f1faf4; border:1px solid #b9d7c7; border-radius:6px; padding:7px 9px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .assistant-list { display:grid; gap:10px; margin-top:14px; }
+    .assistant-empty { margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
+    .assistant-message { padding:12px; border:1px solid #e2e7ec; border-radius:6px; background:#fafbfc; }
+    .assistant-message-question { margin:0; font-size:13px; line-height:1.55; white-space:pre-wrap; }
+    .assistant-message-reply { margin:8px 0 0; padding:9px 10px; background:var(--blue-soft); border-left:3px solid var(--blue); color:var(--ink); font-size:13px; line-height:1.6; white-space:pre-wrap; }
+    .assistant-message-meta { margin-top:7px; color:var(--muted); font-size:11px; }
+    .assistant-compose { margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+    .assistant-compose label { display:block; margin-bottom:7px; color:var(--ink); font-size:13px; font-weight:700; }
+    .assistant-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:9px; }
+    .assistant-status { color:var(--green); font-size:13px; }
+    .assistant-note { margin:8px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
     .contract-panel { margin-top:18px; padding:20px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
     .contract-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; }
     .contract-head h2 { margin:0; font-size:18px; }
@@ -349,6 +365,11 @@
         <div class="contract-section"><h3>五个检查点与答辩</h3><div class="checkpoint-list" id="checkpointList"></div><div id="oralDefenseList" class="defense-list" aria-live="polite"></div></div>
       </section>
       <section class="history-panel" aria-label="学习记忆"><h2>学习记忆 · 老师下次从这里接着教</h2><p id="historySummary">正在读取本节的回答、英语练习和待验收状态…</p></section>
+      <section class="assistant-inbox" id="assistantInbox" aria-label="助教问题收件箱">
+        <div class="assistant-head"><div><div class="eyebrow">Assistant inbox · 本节助教</div><h2>有问题就在这里问，助教立即回复</h2><p>问题会按本节课单独保存。先由本地课堂助教即时拆解，再进入老师复核队列；不需要重复描述你正在学哪一节。</p></div><span class="assistant-badge">即时回复 · 永久留痕</span></div>
+        <div class="assistant-list" id="assistantList" aria-live="polite"><p class="assistant-empty">正在读取本节助教记录…</p></div>
+        <div class="assistant-compose"><label for="assistantQuestion">给本节助教写一句话</label><textarea id="assistantQuestion" rows="3" placeholder="例如：我不明白输入和处理有什么区别，也不知道下一步怎么做。"></textarea><div class="assistant-actions"><button class="primary" id="assistantSubmitBtn" type="button">发送问题并立即回复</button><span class="assistant-status" id="assistantStatus" aria-live="polite"></span></div><p class="assistant-note">本地助教会结合课程上下文给出第一轮解释；云端模型未配置时不会伪装成真人或外部 AI。断网时问题和草稿仍保存在本机。</p></div>
+      </section>
       <section class="flow-nav" id="flowNav" aria-label="闯关导航">
         <div class="flow-nav-head"><div><div class="eyebrow">Next checkpoint · 下一步</div><h2 id="flowTitle">开始 Lv1 · 新手村</h2><p id="flowDescription">先完成本课讲解，再提交 Lv1 证据。按钮会把你带到下一关。</p></div><span class="flow-progress" id="flowProgress">Lv1 / 5</span></div>
         <div class="flow-actions"><button class="primary" id="nextLevelBtn" type="button">定位到 Lv1 提交区 ↓</button><a class="flow-button" id="previousCourseBtn" href="#" hidden>← 上一节</a><a class="flow-button" id="nextCourseBtn" href="#" hidden>下一节课程 →</a><a class="flow-link" href="学习主页.html">返回学习主页</a></div>
@@ -394,6 +415,8 @@
     let submittedEnglishIds = new Set(), englishHintUsed = false;
     const levelLabels = {Lv1:'新手村', Lv2:'熟练工', Lv3:'进阶者', Lv4:'高手', Lv5:'宗师'};
     let videoResources = {enabled:false, items:[]};
+    let assistantQuestions = [];
+    const assistantDraftKey = 'assistant-question-'+courseId.toLowerCase();
     const $ = id => document.getElementById(id);
     const cachePrefix = 'classroom-cache-'+courseId+'-';
     function cachePayload(key, payload) { try { localStorage.setItem(cachePrefix+key, JSON.stringify(payload)); } catch (_) {} }
@@ -408,6 +431,44 @@
         if (cached) { cached.offline = true; return cached; }
         return {ok:false, offline:true, message:error.message};
       }
+    }
+    function localAssistantReply(question) {
+      const text = String(question || '').toLowerCase();
+      if (text.includes('输入') || text.includes('input') || text.includes('处理') || text.includes('process') || text.includes('输出') || text.includes('output')) return '先拆成三步：输入是电脑收到的东西，处理是电脑根据规则改变状态，输出是你能观察到的结果。请写一个自己的例子：输入是什么 → 发生了什么变化 → 看到了什么输出。';
+      if (text.includes('英语') || text.includes('英文') || text.includes('单词') || text.includes('语法') || text.includes('english')) return '本课英语先服务于计算机理解。选一个本课术语，写出英文、中文意思和一个短句，再用 Subject + verb + object 造句；我会先检查拼写，再检查语序。';
+      if (text.includes('视频') || text.includes('youtube') || text.includes('链接')) return '视频只负责建立直觉。打开官方资源后回到课堂完成一个回答或实验；如果播放器打不开，请贴出页面标题或错误文字，我会给你文字资料替代路径。';
+      if (text.includes('为什么') || text.includes('不懂') || text.includes('不会') || text.includes('区别') || text.includes('how') || text.includes('why')) return '先不用追求术语。请分别写：你看到了什么现象？你猜电脑发生了什么？哪一步最不明白？助教会从你的原句继续追问。';
+      return '问题已收到。请补充正在做的模块、看到的具体现象或希望得到的结果中的任意一点；只写一句最简单的话也可以，助教会从这句话开始拆解。';
+    }
+    function renderAssistantQuestions() {
+      const list = $('assistantList'); if (!list) return;
+      if (!assistantQuestions.length) { list.innerHTML = '<p class="assistant-empty">本节还没有问题。遇到任何卡点都可以在下面写一句话。</p>'; return; }
+      list.innerHTML = assistantQuestions.slice(-20).map(item => {
+        const reply = item.assistant_reply || item.reply || '已收到，等待联网服务返回第一轮答复。';
+        const meta = [item.timestamp ? new Date(item.timestamp).toLocaleString() : '', item.teacher_review === 'pending' ? '已进入老师复核队列' : '已回复'].filter(Boolean).join(' · ');
+        return '<article class="assistant-message"><p class="assistant-message-question"><strong>你：</strong>'+escHtml(item.question || '')+'</p><p class="assistant-message-reply"><strong>助教：</strong>'+escHtml(reply)+'</p><p class="assistant-message-meta">'+escHtml(meta)+'</p></article>';
+      }).join('');
+      list.scrollTop = list.scrollHeight;
+    }
+    function loadAssistantQuestions(payload) {
+      assistantQuestions = Array.isArray(payload?.questions) ? payload.questions : [];
+      renderAssistantQuestions();
+    }
+    async function submitAssistantQuestion() {
+      const field = $('assistantQuestion'); const status = $('assistantStatus'); const button = $('assistantSubmitBtn');
+      const question = field?.value.trim() || '';
+      if (!question) { if (status) status.textContent = '先写下你卡住的地方'; return; }
+      button.disabled = true; status.textContent = '助教正在整理本课上下文…';
+      try {
+        const response = await fetch('/api/question', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId, question, answer:question, source:'assistant-inbox'})});
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.message || '保存失败');
+        assistantQuestions.push(result.record || {question, assistant_reply:result.reply, teacher_review:'pending', timestamp:new Date().toISOString()});
+        renderAssistantQuestions(); field.value = ''; localStorage.removeItem(assistantDraftKey); status.textContent = '已保存，助教已立即回复；同时进入老师复核队列。';
+      } catch (error) {
+        const record = {question, assistant_reply:localAssistantReply(question), teacher_review:'offline_draft', timestamp:new Date().toISOString()};
+        assistantQuestions.push(record); renderAssistantQuestions(); field.value = ''; localStorage.setItem(assistantDraftKey, JSON.stringify(assistantQuestions.slice(-20))); status.textContent = '已在本机保存并即时回复；联网后可再次同步老师收件箱。';
+      } finally { button.disabled = false; }
     }
     function updateOfflineBanner(offlineUsed=false) {
       const banner=$('offlineBanner'); const text=$('offlineBannerText');
@@ -783,17 +844,22 @@
     }
     async function loadClassroom() {
       try {
-        const query = encodeURIComponent(courseId); const requestEntries=[['/api/lesson?course_id='+query,'lesson'],['/api/state','state'],['/api/english?course_id='+query,'english'],['/api/history?course_id='+query,'history'],['/api/navigation?course_id='+query,'navigation'],['/api/videos?course_id='+query,'videos']]; const payloads=await Promise.all(requestEntries.map(([url,key])=>fetchCachedJson(url,key))); const [lessonPayload,statePayload,englishPayload,historyPayload,navigationPayload,videosPayload]=payloads; const offlineUsed=payloads.some(payload=>payload?.offline);
+        const query = encodeURIComponent(courseId); const requestEntries=[['/api/lesson?course_id='+query,'lesson'],['/api/state','state'],['/api/english?course_id='+query,'english'],['/api/history?course_id='+query,'history'],['/api/navigation?course_id='+query,'navigation'],['/api/videos?course_id='+query,'videos'],['/api/questions?course_id='+query,'questions']]; const payloads=await Promise.all(requestEntries.map(([url,key])=>fetchCachedJson(url,key))); const [lessonPayload,statePayload,englishPayload,historyPayload,navigationPayload,videosPayload,questionsPayload]=payloads; const offlineUsed=payloads.some(payload=>payload?.offline);
         if (navigationPayload.ok && navigationPayload.navigation) navigation=navigationPayload.navigation;
         if (lessonPayload.ok) { lesson=lessonPayload.lesson; turns=buildTurns(lesson.turns || []); renderTranscript(); renderLessonHeader(); renderContract(lesson.contract || {}); $('courseCount').textContent=statePayload.state?.summary?.courses || 590; const gates=statePayload.state?.summary?.learner_gates; const labs=statePayload.state?.summary?.learner_labs; if(gates) $('gateCount').textContent=(gates.passed || 0)+'/'+(gates.total || 2950); if(labs) $('labCount').textContent=(labs.passed || 0)+'/'+(labs.total || 2950); $('voiceNote').textContent=(courseId==='PRE0'?'声音：本地课堂音频 · 英语先讲，中文紧跟':'声音：浏览器语音回退 · 英语先讲，中文紧跟 · 可继续替换为云端声线'); }
         if (englishPayload.ok) { englishLesson=englishPayload.lesson; renderEnglish(); }
         if (historyPayload.ok) { submittedEnglishIds=new Set((historyPayload.english || []).map(item=>String(item.exercise_id || '')).filter(Boolean)); (historyPayload.english || []).forEach(item=>{const id=String(item.exercise_id || '');if(!id)return;const current=englishExerciseState[id] || {};englishExerciseState[id]=Object.assign({},current,{submitted:true,answer:current.answer || item.answer || '',feedback:current.feedback || (item.review_mode==='teacher'?'答案已进入老师批改队列。':(item.correct?'答案与目标一致。':'已保存，请根据反馈重试。')),attempt:Math.max(Number(current.attempt || 0),Number(item.attempt || 0))});}); (historyPayload.modules || []).forEach(item=>{const id=String(item.module_id || '');const language=String(item.language || 'zh');if(!id)return;const key=id+'-'+language;moduleAnswerState[key]=Object.assign({},moduleAnswerState[key],{submitted:true,answer:moduleAnswerState[key]?.answer || item.answer || '',feedback:moduleAnswerState[key]?.feedback || '已保存，等待老师批改',score:item.auto_screen?.score});}); (historyPayload.defense || []).forEach(item=>{const id=String(item.defense_id || '');if(!id)return;defenseAnswerState[id]=Object.assign({},defenseAnswerState[id],{submitted:true,answer:defenseAnswerState[id]?.answer || item.answer || '',feedback:defenseAnswerState[id]?.feedback || '已提交并永久锁定；可用“上一题”回看。'});}); saveEnglishProgress(); saveModuleProgress(); saveDefenseProgress(); renderExercise(); renderEnglishModuleLessons(); renderIntegratedModules(); renderDefense(); }
         if (videosPayload.ok) renderVideos(videosPayload);
+        if (questionsPayload.ok) loadAssistantQuestions(questionsPayload);
+        else { try { assistantQuestions = JSON.parse(localStorage.getItem(assistantDraftKey) || '[]'); } catch (_) { assistantQuestions = []; } renderAssistantQuestions(); }
         if (historyPayload.ok) { submittedGateIds=new Set((historyPayload.gates || []).map(item=>String(item.item_id || '')).filter(item=>/^Lv[1-5]$/.test(item))); const answerCount=historyPayload.answers?.length || 0; const englishCount=historyPayload.english?.length || 0; const latest=historyPayload.answers?.at(-1)?.answer || ''; $('historySummary').innerHTML='本节已有 <strong>'+answerCount+'</strong> 次概念回答、<strong>'+englishCount+'</strong> 次英语练习记录和 <strong>'+submittedGateIds.size+'</strong> 个关卡证据提交，全部等待老师验收。'+(latest ? ' 最近一次概念回答已保存，下一次课堂会先从你的原句纠正本课概念和英语。' : ' 你提交后，老师会把原句、错误类型和下一次复习点一起保存。'); renderFlowNavigation(); const savedAnswer=localStorage.getItem(answerKey) || latest; const savedPhase=localStorage.getItem(phaseKey); if(savedAnswer && savedPhase !== 'lesson-complete'){index=Number(lesson.question_turn_index ?? 7);pausedForQuestion=true;renderTurn(index);$('answer').value=savedAnswer;$('englishHint').textContent=lesson.english_coaching || '英文可以先从 Subject + verb + object 开始写。';$('englishHint').classList.add('show');$('questionBox').classList.add('show');$('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;$('startBtn').disabled=true;$('replayBtn').disabled=false;setTask('listen','done');setTask('predict','done');setTask('answer','done');setTask('recall','active');setStatus('已恢复到上次回答后 · 点击题目下方继续下一段',false);} }
         updateOfflineBanner(offlineUsed);
       } catch (error) { updateOfflineBanner(true); setStatus('课堂已载入本地版本 · 状态服务暂时不可用',false); }
     }
     $('startBtn').onclick=()=>playTurn(index<0?0:index);
+    $('assistantSubmitBtn').onclick=submitAssistantQuestion;
+    $('assistantQuestion').addEventListener('input', () => { try { localStorage.setItem(assistantDraftKey, $('assistantQuestion').value); } catch (_) {} });
+    try { const assistantDraft = localStorage.getItem(assistantDraftKey); if (assistantDraft && $('assistantQuestion')) $('assistantQuestion').value = assistantDraft; } catch (_) {}
     $('pauseBtn').onclick=()=>{ if(currentAudio){ if(currentAudio.paused){currentAudio.play();setStatus('继续播放',true);$('pauseBtn').textContent='Ⅱ 暂停';} else {currentAudio.pause();setStatus('已暂停',false);$('pauseBtn').textContent='▶ 播放';} } else if(fallbackUtterance && window.speechSynthesis){ if(fallbackPaused){window.speechSynthesis.resume();fallbackPaused=false;setStatus('继续播放',true);$('pauseBtn').textContent='Ⅱ 暂停';} else {window.speechSynthesis.pause();fallbackPaused=true;setStatus('已暂停',false);$('pauseBtn').textContent='▶ 播放';} } };
     $('replayBtn').onclick=()=>{if(index>=0)playTurn(index);};
     $('slowerBtn').onclick=()=>{slow=!slow;$('slowerBtn').textContent=slow?'▶ 正常速度':'◀ 慢一点';if(currentAudio)currentAudio.playbackRate=slow?.82:1;};
