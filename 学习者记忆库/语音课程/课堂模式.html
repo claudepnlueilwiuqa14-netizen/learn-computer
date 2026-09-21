@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // A file URL cannot call the local lesson APIs. Forward double-clicked
+    // copies to the local classroom service while preserving the lesson query.
+    if (window.location.protocol === 'file:') {
+      const classroomUrl = new URL('http://127.0.0.1:8765/课堂模式.html');
+      classroomUrl.search = window.location.search;
+      classroomUrl.hash = window.location.hash;
+      window.location.replace(classroomUrl.href);
+    }
+  </script>
+  <title id="pageTitle">PRE0 · 双语语音课堂</title>
+  <style>
+    :root { color-scheme: light; --ink:#20262e; --muted:#697382; --line:#dce2e8; --paper:#ffffff; --soft:#f4f6f8; --blue:#1f5f9e; --blue-soft:#eaf2fb; --green:#2f7d5a; --gold:#b57a16; }
+    * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
+    body { margin:0; min-height:100vh; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color:var(--ink); background:#eef1f4; }
+    .app { display:grid; grid-template-columns: minmax(0, 1fr) 330px; min-height:100vh; }
+    main { min-width:0; padding:28px clamp(18px, 4vw, 64px) 60px; }
+    aside { background:var(--paper); border-left:1px solid var(--line); padding:24px 22px; }
+    .eyebrow { color:var(--blue); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    h1 { margin:8px 0 8px; font-size:clamp(25px, 3vw, 40px); line-height:1.15; }
+    .subtitle { margin:0; color:var(--muted); font-size:15px; }
+    .topline { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:24px; }
+    .top-actions { display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+    .home-link { color:var(--blue); font-size:12px; text-decoration:none; }
+    .course-position { color:var(--muted); font-size:12px; font-weight:700; }
+    .level { flex:0 0 auto; padding:8px 11px; border:1px solid #d8c28d; color:#835b13; background:#fffaf0; border-radius:7px; font-size:13px; font-weight:700; }
+    .course-strip { margin-bottom:18px; padding:18px 20px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+    .strip-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+    .strip-heading h2 { margin:5px 0 0; font-size:17px; }
+    .metrics { display:flex; gap:18px; color:var(--muted); font-size:12px; text-align:right; }
+    .metrics strong { display:block; color:var(--ink); font-size:18px; line-height:1.1; }
+    .task-list { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:8px; margin-top:16px; }
+    .task { display:grid; grid-template-columns:25px minmax(0,1fr); grid-template-rows:auto auto; gap:0 8px; min-height:70px; padding:10px; text-align:left; background:#fafbfc; border:1px solid #e2e7ec; border-radius:6px; }
+    .task-index { grid-row:1 / span 2; display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:#e5eaf0; color:#596575; font-size:12px; font-weight:800; }
+    .task b { display:block; font-size:12px; line-height:1.35; }
+    .task small { display:block; margin-top:5px; color:var(--muted); font-size:11px; line-height:1.35; }
+    .task-state { grid-column:2; margin-top:5px; color:#7a8694; font-size:11px; }
+    .task.active { border-color:#9dbbda; background:var(--blue-soft); }
+    .task.active .task-index { background:var(--blue); color:white; }
+    .task.done { border-color:#b9d7c7; background:#f4faf6; }
+    .task.done .task-index { background:var(--green); color:white; }
+    .task.done .task-state { color:var(--green); }
+    .teacher { display:flex; gap:16px; align-items:center; padding:16px 18px; background:var(--paper); border:1px solid var(--line); border-radius:8px; box-shadow:0 5px 20px rgba(32,38,46,.05); }
+    .avatar { width:48px; height:48px; border-radius:50%; display:grid; place-items:center; background:#e6eef7; color:var(--blue); font-size:22px; font-weight:700; }
+    .teacher strong { display:block; margin-bottom:4px; }
+    .teacher span { color:var(--muted); font-size:13px; }
+    .lesson { margin-top:18px; background:var(--paper); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .lesson-head { padding:18px 20px 14px; display:flex; justify-content:space-between; gap:14px; border-bottom:1px solid var(--line); }
+    .lesson-head h2 { margin:0; font-size:18px; }
+    .turn-count { color:var(--muted); font-size:13px; white-space:nowrap; }
+    .now { padding:20px; background:#fbfcfd; min-height:185px; }
+    .now-label { color:var(--blue); font-size:12px; font-weight:700; margin-bottom:12px; }
+    .now-text { font-size:clamp(21px, 2.8vw, 31px); line-height:1.4; margin:0; max-width:900px; }
+    .now-translation { margin:13px 0 0; color:var(--muted); font-size:16px; line-height:1.6; }
+    .progress { height:5px; background:#e8edf2; }
+    .progress > span { display:block; height:100%; background:var(--blue); width:0; transition:width .25s ease; }
+    .controls { display:flex; flex-wrap:wrap; gap:9px; padding:16px 20px; border-top:1px solid var(--line); }
+    button { border:1px solid #cbd4de; background:#fff; color:var(--ink); border-radius:6px; min-height:38px; padding:0 14px; font:inherit; cursor:pointer; }
+    button:hover { border-color:var(--blue); color:var(--blue); }
+    button.primary { color:white; background:var(--blue); border-color:var(--blue); }
+    button.primary:hover { background:#184d80; color:#fff; }
+    button:disabled { cursor:not-allowed; opacity:.45; }
+    .transcript { padding:0 20px 20px; }
+    .turn { display:grid; grid-template-columns:70px minmax(0,1fr); gap:12px; padding:13px 12px; border-bottom:1px solid #edf0f3; border-radius:6px; }
+    .turn.active { background:var(--blue-soft); }
+    .turn.done { color:#55616f; }
+    .lang { font-size:11px; font-weight:800; color:var(--blue); padding-top:4px; }
+    .turn.zh .lang { color:var(--green); }
+    .turn p { margin:0; line-height:1.6; }
+    .turn .translation { color:var(--muted); font-size:13px; margin-top:4px; }
+    .video-panel { margin-top:18px; padding:20px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+    .video-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+    .video-head h2 { margin:0; font-size:18px; }
+    .video-head p { margin:5px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
+    .video-config-link { display:inline-block; margin-top:8px; color:var(--blue); font-size:12px; text-decoration:none; }
+    .video-config-link:hover { text-decoration:underline; }
+    .video-badge { flex:0 0 auto; color:#835b13; background:#fffaf0; border:1px solid #d8c28d; border-radius:6px; padding:7px 9px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .video-list { display:grid; gap:10px; margin-top:14px; }
+    .video-card { padding:13px; background:#fafbfc; border:1px solid #e2e7ec; border-radius:6px; }
+    .video-card h3 { margin:0; color:var(--blue); font-size:15px; line-height:1.4; }
+    .video-card p { margin:6px 0 0; color:var(--ink); font-size:13px; line-height:1.55; }
+    .video-meta { display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:7px; color:var(--muted); font-size:11px; }
+    .video-actions { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin-top:10px; }
+    .video-link { display:inline-flex; align-items:center; min-height:34px; padding:0 11px; border:1px solid #cbd4de; border-radius:6px; color:var(--blue); background:#fff; text-decoration:none; font-size:12px; }
+    .video-link:hover { border-color:var(--blue); }
+    .video-frame { margin-top:11px; aspect-ratio:16/9; background:#151a20; border-radius:6px; overflow:hidden; }
+    .video-frame iframe,.video-frame video { display:block; width:100%; height:100%; border:0; }
+    .video-empty { color:var(--muted); font-size:13px; line-height:1.55; }
+    .question { display:none; margin-top:18px; padding:18px; border:1px solid #d8c28d; background:#fffaf0; border-radius:8px; }
+    .question.show { display:block; }
+    .question h3 { margin:0 0 8px; font-size:17px; }
+    .question p { margin:0 0 12px; line-height:1.55; }
+    textarea { display:block; width:100%; min-height:92px; resize:vertical; padding:10px 12px; border:1px solid #cbd4de; border-radius:6px; font:inherit; line-height:1.5; background:white; }
+    .question-actions { display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .answer-status { color:var(--green); font-size:13px; }
+    .answer-hint { display:none; margin:12px 0 0; color:#735b27; font-size:13px; line-height:1.55; }
+    .answer-hint.show { display:block; }
+    .question-actions { flex-wrap:wrap; }
+    .english-panel { margin-top:18px; padding:20px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+    .english-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+    .english-head h2 { margin:0; font-size:18px; }
+    .english-head p { margin:5px 0 0; color:var(--muted); font-size:13px; line-height:1.5; }
+    .english-level { color:#835b13; background:#fffaf0; border:1px solid #d8c28d; border-radius:6px; padding:7px 9px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .word-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:8px; }
+    .word-card { min-height:132px; padding:12px; background:#fafbfc; border:1px solid #e2e7ec; border-radius:6px; }
+    .word-card b { display:block; color:var(--blue); font-size:17px; }
+    .word-card .ipa { display:block; margin-top:3px; color:#735b27; font:600 12px/1.3 Georgia,serif; }
+    .word-card .meaning { display:block; margin-top:2px; font-size:13px; }
+    .word-card .pos { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+    .word-card p { margin:10px 0 0; font-size:12px; line-height:1.45; }
+    .word-card em { display:block; margin-top:4px; color:var(--muted); font-style:normal; font-size:11px; line-height:1.4; }
+    .word-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .word-card .word-speak,.word-card .word-example-speak { min-height:28px; padding:0 7px; font-size:11px; }
+    .english-module-list { display:grid; gap:9px; margin-top:14px; }
+    .english-module-card { padding:12px; background:#f7fafc; border:1px solid #dfe6ed; border-radius:6px; }
+    .english-module-card h4 { margin:0; color:var(--blue); font-size:13px; }
+    .english-module-card p { margin:5px 0 0; font-size:12px; line-height:1.55; }
+    .english-module-card .module-english-words { color:var(--ink); }
+    .english-module-card .module-english-words b { color:var(--blue); }
+    .teacher-script { color:#735b27; }
+    .grammar-box { margin-top:12px; padding:13px 14px; background:var(--blue-soft); border-left:3px solid var(--blue); }
+    .grammar-box strong { display:block; font-size:14px; }
+    .grammar-box p { margin:5px 0 0; font-size:13px; line-height:1.55; }
+    .english-exercise { margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+    .exercise-meta { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:12px; }
+    .exercise-prompt { margin:7px 0 10px; font-size:15px; line-height:1.55; }
+    .exercise-actions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:9px; }
+    .exercise-status { color:var(--green); font-size:13px; }
+     .platform-routine { margin:12px 0 0; padding:12px 14px; color:var(--muted); background:#f7fafc; border-left:3px solid var(--green); font-size:12px; line-height:1.6; }
+     .platform-routine strong { color:var(--ink); }
+     .exercise-tools { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:9px; }
+     .exercise-tools button { min-height:34px; padding:0 10px; font-size:12px; }
+     .exercise-nav { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:11px; }
+     .exercise-index-btn { min-width:32px; min-height:30px; padding:0 6px; font-size:11px; }
+     .exercise-index-btn.active { color:white; background:var(--blue); border-color:var(--blue); }
+     .exercise-index-btn.done { color:var(--green); border-color:#b9d7c7; background:#f4faf6; }
+     .exercise-hint { display:none; margin:10px 0 0; padding:10px 12px; color:#735b27; background:#fffaf0; border:1px solid #ead7a7; border-radius:6px; font-size:13px; line-height:1.55; }
+     .exercise-hint.show { display:block; }
+     .reading-passage { display:none; margin:10px 0; padding:12px 14px; background:#f7fafc; border:1px solid var(--line); color:var(--ink); line-height:1.65; }
+     .reading-passage.show { display:block; }
+     .exercise-review { color:var(--muted); font-size:12px; }
+     .english-course-nav { display:flex; justify-content:space-between; gap:9px; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+     .english-course-nav a { color:var(--blue); font-size:13px; text-decoration:none; }
+    .english-roadmap { margin-top:14px; padding:13px 14px; background:#f7fafc; border:1px solid #e2e7ec; border-radius:6px; }
+    .english-roadmap-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .english-roadmap-head strong { color:var(--blue); font-size:13px; }
+    .english-roadmap-head span { color:#835b13; background:#fffaf0; border:1px solid #d8c28d; border-radius:5px; padding:4px 7px; font-size:11px; font-weight:700; white-space:nowrap; }
+    .english-roadmap p { margin:5px 0 0; color:var(--muted); font-size:12px; line-height:1.55; }
+    .english-roadmap-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:9px; }
+    .english-roadmap-grid div { color:var(--ink); font-size:12px; line-height:1.5; }
+    .english-roadmap-grid b { color:var(--blue); }
+    .stage-bar { display:flex; gap:4px; margin-top:10px; }
+    .stage-bar i { flex:1; height:7px; background:#dfe6ed; border-radius:2px; }
+    .stage-bar i.active { background:var(--blue); }
+    .history-panel { margin-top:18px; padding:16px 20px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+    .history-panel h2 { margin:0 0 8px; font-size:16px; }
+    .history-panel p { margin:0; color:var(--muted); font-size:13px; line-height:1.6; }
+    .history-panel strong { color:var(--ink); }
+    .contract-panel { margin-top:18px; padding:20px; background:var(--paper); border:1px solid var(--line); border-radius:8px; }
+    .contract-head { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; }
+    .contract-head h2 { margin:0; font-size:18px; }
+    .contract-head p { margin:5px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
+    .contract-badge { flex:0 0 auto; color:#835b13; background:#fffaf0; border:1px solid #d8c28d; border-radius:6px; padding:7px 9px; font-size:12px; font-weight:700; }
+    .contract-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin-top:14px; }
+    .fact { padding:11px 12px; background:#fafbfc; border:1px solid #e2e7ec; border-radius:6px; }
+    .fact b { display:block; color:var(--blue); font-size:12px; margin-bottom:4px; }
+    .fact span { display:block; color:var(--ink); font-size:13px; line-height:1.5; }
+    .contract-section { margin-top:16px; padding-top:14px; border-top:1px solid var(--line); }
+    .contract-section h3 { margin:0 0 10px; font-size:15px; }
+    .module-summary { display:flex; flex-wrap:wrap; gap:7px; margin:10px 0 12px; }
+    .module-summary span { padding:6px 9px; color:var(--blue); background:var(--blue-soft); border:1px solid #b8cfe4; border-radius:5px; font-size:12px; font-weight:700; }
+    .module-legend { margin:0 0 12px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .module-nav { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:11px; }
+    .module-nav button { min-height:32px; padding:0 9px; color:var(--blue); font-size:11px; }
+    .module-nav button.active { color:#fff; background:var(--blue); border-color:var(--blue); }
+    .module-current { margin-left:8px; color:var(--muted); font-size:12px; font-weight:400; }
+    .level-list,.lab-list,.checkpoint-list { display:grid; gap:9px; }
+    .level-item,.lab-item,.checkpoint-item { padding:12px; background:#fafbfc; border:1px solid #e2e7ec; border-radius:6px; }
+    .level-item { display:grid; grid-template-columns:56px minmax(0,1fr); gap:10px; align-items:start; }
+    .level-item b { color:var(--blue); font-size:12px; }
+    /* The level badge and task text share the first row; guidance and evidence
+       must span the full card width instead of falling into the 56px badge column. */
+    .level-item > .teacher-guide,.level-item > .evidence-form { grid-column:1 / -1; min-width:0; }
+    .level-item p,.lab-item p,.checkpoint-item p { margin:0; font-size:13px; line-height:1.55; white-space:pre-wrap; }
+    .lab-item h4,.checkpoint-item h4 { margin:0 0 6px; color:var(--blue); font-size:14px; }
+    .teacher-guide { margin:9px 0; padding:10px 12px; background:#fffaf0; border:1px solid #ead7a7; border-radius:6px; writing-mode:horizontal-tb !important; }
+    .teacher-guide > strong { display:block; width:100%; color:#735b27; font-size:13px; line-height:1.55; writing-mode:horizontal-tb !important; word-break:normal; overflow-wrap:anywhere; white-space:normal; }
+    .teacher-steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:4px 18px; margin:7px 0 0; padding:0; color:var(--ink); font-size:12px; line-height:1.45; list-style:none; writing-mode:horizontal-tb !important; }
+    .teacher-steps li { margin:0; min-width:0; writing-mode:horizontal-tb !important; }
+    .teacher-steps li::before { content:'步骤 '; color:#927337; font-weight:700; }
+    .defense-list { margin-top:10px; }
+    .defense-card { padding:14px; background:#fafbfc; border:1px solid #e2e7ec; border-radius:6px; }
+    .defense-card.is-submitted { border-color:#c7ced6; background:#f0f2f4; }
+    .defense-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .defense-head h4 { margin:0; color:var(--blue); font-size:14px; line-height:1.45; }
+    .defense-count { color:var(--muted); font-size:12px; white-space:nowrap; }
+    .defense-prompt { margin:10px 0 0; color:var(--ink); font-size:14px; line-height:1.6; }
+    .defense-card.is-submitted .defense-prompt { color:#68737f; }
+    .defense-chat-box { margin-top:10px; padding:9px 10px 10px; background:#f7f9fb; border:1px solid #dce3ea; border-radius:6px; writing-mode:horizontal-tb !important; }
+    .defense-chat-label { display:block; margin-top:12px; color:var(--muted); font-size:12px; font-weight:700; }
+    .defense-chat-box .defense-chat-label { margin-top:0; }
+    .defense-answer { margin-top:6px; min-height:110px; }
+    .defense-answer:disabled { color:#697482; background:#e5e8eb; border-color:#c7ced6; cursor:not-allowed; opacity:1; }
+    .defense-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:9px; }
+    .defense-actions button { min-height:34px; padding:0 11px; font-size:12px; }
+    .defense-actions .defense-submit.is-locked { color:#68737f; background:#d9dde1; border-color:#c7ced6; cursor:not-allowed; opacity:1; }
+    .defense-status { color:var(--green); font-size:12px; line-height:1.45; }
+    .defense-nav { display:flex; align-items:center; justify-content:space-between; gap:9px; margin-top:10px; }
+    .defense-nav button { min-height:34px; padding:0 11px; font-size:12px; }
+    .defense-nav-note { color:var(--muted); font-size:11px; text-align:center; }
+    .lab-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:9px; }
+    .lab-meta span { display:block; color:var(--muted); font-size:12px; line-height:1.45; }
+    .evidence-form { display:grid; gap:8px; margin-top:10px; }
+    .evidence-form input,.evidence-form textarea { min-height:36px; padding:8px 10px; border:1px solid #cbd4de; border-radius:6px; font:inherit; line-height:1.45; }
+    .evidence-form textarea { min-height:68px; }
+    .evidence-actions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+    .evidence-status { color:var(--green); font-size:12px; line-height:1.45; }
+    .flow-nav { margin-top:18px; padding:18px 20px; background:#f8fbfe; border:1px solid #b8cfe4; border-radius:8px; }
+    .flow-nav-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+    .flow-nav h2 { margin:0; font-size:18px; }
+    .flow-nav p { margin:6px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
+    .flow-progress { flex:0 0 auto; color:var(--blue); background:var(--blue-soft); border:1px solid #b8cfe4; border-radius:6px; padding:7px 9px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .flow-actions { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin-top:14px; }
+    .flow-button { display:inline-flex; align-items:center; min-height:38px; padding:0 14px; border:1px solid #cbd4de; border-radius:6px; color:var(--ink); background:#fff; text-decoration:none; font:inherit; font-size:13px; }
+    .flow-button:hover { border-color:var(--blue); color:var(--blue); }
+    .flow-link { color:var(--blue); font-size:13px; text-decoration:none; margin-left:2px; }
+    .flow-note { margin-top:11px !important; font-size:12px !important; }
+    .level-item.flow-target { border-color:#7faed7; box-shadow:0 0 0 3px #eaf2fb; }
+    details.layer { border:1px solid #e2e7ec; border-radius:6px; padding:10px 12px; background:#fafbfc; }
+    details.layer + details.layer { margin-top:7px; }
+    details.layer summary { cursor:pointer; color:var(--blue); font-weight:700; font-size:13px; }
+    .layer-body { padding-top:8px; color:var(--ink); font-size:13px; line-height:1.55; }
+    .layer-body p { margin:4px 0; }
+    #layerList { display:none; }
+    .integrated-modules { display:grid; gap:12px; }
+    .integrated-module { padding:15px; background:#fff; border:1px solid #cfd9e3; border-radius:8px; scroll-margin-top:18px; }
+    .integrated-module.completed { border-color:#9fc8b1; background:#fbfefc; }
+    .integrated-module-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .integrated-module-head h4 { margin:0; color:var(--blue); font-size:15px; line-height:1.4; }
+    .integrated-module-head span { color:var(--muted); font-size:12px; white-space:nowrap; }
+    .module-beginner { margin-top:10px; padding:11px 12px; background:#fffaf0; border:1px solid #ead7a7; border-radius:6px; }
+    .module-beginner strong { color:#735b27; font-size:13px; }
+    .module-beginner p,.module-knowledge p,.module-action p,.module-english p { margin:5px 0 0; font-size:13px; line-height:1.6; }
+    .module-knowledge { margin-top:10px; padding:10px 12px; background:#f7fafc; border-left:3px solid var(--blue); }
+    .module-action { margin-top:9px; color:var(--muted); }
+    .module-english { margin-top:11px; padding:11px 12px; background:#f2f8f5; border-left:3px solid var(--green); }
+    .module-english h5 { margin:0; color:var(--green); font-size:13px; }
+    .module-english .module-words { color:var(--blue); font-weight:700; }
+    .module-forms { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:11px; }
+    .module-form { padding:11px 12px; border:1px solid #e2e7ec; border-radius:6px; background:#fafbfc; }
+    .module-form h5 { margin:0 0 6px; color:var(--ink); font-size:13px; }
+    .module-form p { margin:0 0 8px; color:var(--muted); font-size:12px; line-height:1.5; }
+    .module-form textarea { min-height:72px; font-size:13px; }
+    .module-form-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .module-form-actions button { min-height:34px; padding:0 10px; font-size:12px; }
+    .module-feedback { color:var(--green); font-size:12px; line-height:1.45; }
+    @media(max-width:700px) { .module-forms { grid-template-columns:1fr; } .integrated-module-head { display:block; } .integrated-module-head span { display:block; margin-top:4px; } }
+    .source-link { color:var(--blue); word-break:break-word; }
+    aside h2 { font-size:16px; margin:0 0 15px; }
+    .side-section { padding-bottom:20px; margin-bottom:20px; border-bottom:1px solid var(--line); }
+    .meter { display:flex; justify-content:space-between; margin-bottom:7px; font-size:13px; }
+    .meter span:last-child { color:var(--muted); }
+    .bar { height:8px; background:#e8edf2; border-radius:3px; overflow:hidden; }
+    .bar span { display:block; width:0%; height:100%; background:var(--green); }
+    .terms { display:grid; gap:9px; }
+    .term { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:9px 10px; background:var(--soft); border-radius:6px; font-size:13px; }
+    .term b { color:var(--blue); }
+    .term em { color:var(--muted); font-style:normal; }
+    .rule { color:var(--muted); font-size:13px; line-height:1.65; margin:0; }
+    .status { display:flex; align-items:center; gap:8px; font-size:13px; }
+    .dot { width:9px; height:9px; border-radius:50%; background:#9aa5b1; }
+    .dot.playing { background:var(--green); box-shadow:0 0 0 4px #e0f0e8; }
+     .voice-note { margin-top:9px; color:var(--muted); font-size:12px; line-height:1.45; }
+     .offline-banner { margin-bottom:18px; padding:13px 16px; border:1px solid #b9d7c7; border-radius:8px; background:#f4faf6; color:#245c42; font-size:13px; line-height:1.55; }
+     .offline-banner.warn { border-color:#d8c28d; background:#fffaf0; color:#835b13; }
+     .offline-banner strong { display:block; margin-bottom:3px; }
+    @media (max-width:1000px) { .task-list { grid-template-columns:repeat(3, minmax(0,1fr)); } .word-grid { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+    @media (max-width:900px) { .app { grid-template-columns:1fr; } aside { border-left:0; border-top:1px solid var(--line); } }
+    @media (max-width:560px) { main { padding:20px 13px 38px; } .topline { display:block; } .top-actions { align-items:flex-start; margin-top:10px; } .level { display:inline-block; } .teacher { padding:13px; } .turn { grid-template-columns:56px minmax(0,1fr); } .controls { padding:13px; } .controls button { flex:1 1 calc(50% - 9px); } .strip-heading { display:block; } .metrics { margin-top:14px; text-align:left; gap:14px; } .task-list { grid-template-columns:1fr; } .task { min-height:58px; } .english-panel { padding:15px; } .english-head { display:block; } .english-level { display:inline-block; margin-top:10px; } .word-grid { grid-template-columns:1fr 1fr; } .video-panel { padding:15px; } .video-head { display:block; } .video-badge { display:inline-block; margin-top:10px; } }
+    @media (max-width:560px) { .contract-panel { padding:15px; } .contract-head { display:block; } .contract-badge { display:inline-block; margin-top:10px; } .contract-facts,.lab-meta { grid-template-columns:1fr; } .level-item { grid-template-columns:48px minmax(0,1fr); } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main>
+      <div class="topline">
+        <div><div class="eyebrow" id="courseEyebrow">Computer Science · PRE0</div><h1 id="courseHeading">认识电脑配件与开机</h1><p class="subtitle" id="courseSubtitle">What does a computer do? · 电脑到底做什么？</p></div>
+        <div class="top-actions"><a class="home-link" href="学习主页.html">← 返回学习主页</a><span class="course-position" id="coursePosition">第 1 / 590 节</span><div class="level" id="levelBadge">Lv1 · 新手村</div></div>
+      </div>
+      <section class="offline-banner" id="offlineBanner" aria-live="polite"><strong>本地课堂已准备</strong><span id="offlineBannerText">课程、英语课件和学习记录保存在本机；云端老师和远程视频需要联网。</span></section>
+      <section class="course-strip" aria-label="台前任务列表">
+        <div class="strip-heading">
+          <div><div class="eyebrow">Front-stage mission</div><h2>今天只推进一小格，老师会一直在同一页陪你完成</h2></div>
+          <div class="metrics" aria-label="总课程进度"><div><strong id="courseCount">590</strong>课程</div><div><strong id="gateCount">0/2950</strong>关卡</div><div><strong id="labCount">0/2950</strong>基础 Lab</div></div>
+        </div>
+        <div class="module-summary" aria-label="本课结构"><span id="lectureCount">讲授模块 11</span><span>五级闯关 5</span><span>实战 Lab 5</span><span>检查点 5</span></div>
+        <p class="module-legend">计数说明：讲授模块是本课的知识结构；“讲解片段 N / 总数”只是语音播放进度，不是额外课次。完成顺序由讲授 → 英语训练 → Lv1–Lv5 → Lab → 检查点组成。</p>
+        <div class="task-list" id="taskList" role="list" aria-label="本节任务">
+          <div class="task active" data-task="listen" role="listitem"><span class="task-index">1</span><span><b>听懂核心问题</b><small>English → 中文</small></span><span class="task-state">当前</span></div>
+          <div class="task" data-task="predict" role="listitem"><span class="task-index">2</span><span><b>先预测</b><small>Input / process / output</small></span><span class="task-state">待开始</span></div>
+          <div class="task" data-task="answer" role="listitem"><span class="task-index">3</span><span><b>提交自己的模型</b><small>老师即时反馈</small></span><span class="task-state">待开始</span></div>
+          <div class="task" data-task="recall" role="listitem"><span class="task-index">4</span><span><b>复述并完成课堂</b><small>因果链验收</small></span><span class="task-state">待开始</span></div>
+          <div class="task" data-task="lab" role="listitem"><span class="task-index">5</span><span><b>进入 Lab 1</b><small>留下真实证据</small></span><span class="task-state">待开始</span></div>
+        </div>
+      </section>
+      <section class="teacher" aria-label="老师状态">
+        <div class="avatar">T</div><div><strong>Teacher mode · 双语老师模式</strong><span id="teacherStatus">准备开始：English → 中文 → 预测</span><div class="voice-note" id="voiceNote">声音：本地课堂音频 · 英语先讲，中文紧跟</div></div>
+      </section>
+      <section class="lesson" aria-label="课堂播放器">
+        <div class="lesson-head"><h2 id="lessonTitle">What does a computer do? / 电脑到底做什么？</h2><span class="turn-count" id="turnCount">0 / 12</span></div>
+        <div class="now"><div class="now-label" id="nowLabel">READY</div><p class="now-text" id="nowText">点击“开始课堂”，老师会先用英语讲解，再用中文翻译。</p><p class="now-translation" id="nowTranslation">Click “Start lesson”. The teacher will explain in English, then repeat in Chinese.</p></div>
+        <div class="progress"><span id="progressBar"></span></div>
+        <div class="controls">
+          <button class="primary" id="startBtn">▶ 开始课堂</button><button id="pauseBtn" disabled>Ⅱ 暂停</button><button id="replayBtn" disabled>↻ 重播</button><button id="slowerBtn">◀ 慢一点</button><button id="continueBtn" disabled>继续 ▶</button>
+        </div>
+        <div class="transcript" id="transcript"></div>
+      </section>
+      <section class="video-panel" id="videoPanel" aria-label="视频辅助课件">
+        <div class="video-head"><div><div class="eyebrow">Video support · 视频辅助</div><h2>看一小段，再回到课堂验证</h2><p>视频只负责建立直觉或展示背景；真正的掌握仍要靠你的回答、英语练习、Lab 和老师验收。</p><a class="video-config-link" href="视频课件配置说明.md" target="_blank" rel="noopener">打开视频与平台配置清单 ↗</a></div><span class="video-badge" id="videoBadge">视频载入中</span></div>
+        <div class="video-list" id="videoList"><p class="video-empty">正在读取本课视频资源…</p></div>
+      </section>
+      <section class="question" id="questionBox">
+        <h3>Pause and predict · 先预测</h3>
+        <p id="questionPrompt">When you type the letter A, what is the input, what is the process, and what is the output?<br>当你输入字母 A 时，什么是输入、处理和输出？</p>
+        <textarea id="answer" placeholder="用自己的话回答，可以中文，也可以夹带英文术语"></textarea>
+        <div class="question-actions"><button class="primary" id="submitBtn">提交答案</button><button id="questionContinueBtn" disabled>提交后继续下一段 ▶</button><span class="answer-status" id="answerStatus"></span></div><p class="answer-hint" id="englishHint"></p>
+      </section>
+      <section class="english-panel" id="englishPanel" aria-label="Computer English 英语训练">
+        <div class="english-head"><div><div class="eyebrow">Computer English · 同步英语</div><h2 id="englishTitle">本节英语训练正在载入</h2><p id="englishIntro">每节课只练少量高频词，但要读、写、拼、排句并独立造句。</p></div><div class="english-level" id="englishLevel">A0 → A1</div></div>
+        <div class="word-grid" id="wordGrid"></div><div class="english-module-list" id="englishModuleLessons" aria-label="按计算机模块组织的英语课堂"></div>
+        <div class="grammar-box"><strong id="grammarPattern">Subject + verb + object</strong><p id="grammarExplanation">英语最小陈述句：谁 + 做什么 + 对什么做。</p><p id="grammarExample">The computer processes the input. · 电脑处理输入的信息。</p></div>
+       <div class="english-exercise"><div class="exercise-meta"><span id="exerciseType">Word recall · 单词回忆</span><span id="exerciseCount">1 / 10</span></div><div class="reading-passage" id="readingPassage"></div><p class="exercise-prompt" id="exercisePrompt">英语练习正在载入…</p><textarea id="englishAnswer" placeholder="在这里输入英文或中文答案；先独立完成，再看提示"></textarea><div class="exercise-tools"><button id="englishHintBtn" type="button">查看提示</button><button id="englishSpeakBtn" type="button">朗读题目</button><span class="exercise-review" id="exerciseReview"></span></div><p class="exercise-hint" id="exerciseHint"></p><div class="exercise-actions"><button class="primary" id="englishSubmitBtn">提交英语练习</button><button id="englishPrevBtn" disabled>◀ 上一题</button><button id="englishNextBtn" disabled>下一题 ▶</button><span class="exercise-status" id="englishStatus"></span></div><div class="exercise-nav" id="exerciseNav" aria-label="英语练习题号"></div></div>
+        <div class="english-roadmap" id="englishRoadmap"><div class="english-roadmap-head"><strong id="roadmapTitle">English roadmap · 英语长期主线</strong><span id="roadmapStage">阶段载入中</span></div><p id="roadmapGrammar">正在读取当前阶段的语法范围…</p><div class="english-roadmap-grid"><div><b>词汇目标：</b><span id="roadmapWords">—</span></div><div><b>课程位置：</b><span id="roadmapCourses">—</span></div><div><b>阅读训练：</b><span id="roadmapReading">—</span></div><div><b>写作训练：</b><span id="roadmapWriting">—</span></div></div><div class="stage-bar" id="stageBar" aria-label="英语阶段进度"></div></div><p class="platform-routine"><strong>平台训练路径（本节英语课堂统一流程）：</strong><span id="platformRoutine">按模块学习 → 看音标和例句 → 听音跟读 → 键盘回忆 → 语法句型 → 翻译、阅读、写作 → 提交批改 → 间隔复习。</span></p>
+      </section>
+      <section class="contract-panel" id="contractPanel" aria-label="本课深度合同">
+        <div class="contract-head"><div><div class="eyebrow">Course contract · 本课深度合同</div><h2>从理解到证据：五级闯关与五个 Lab</h2><p id="contractIntro">正在读取本课的机制、不变量、失败实验和验收标准…</p></div><span class="contract-badge" id="contractBadge">合同载入中</span></div>
+        <div class="contract-facts" id="contractFacts"></div>
+        <div class="contract-section"><h3 id="moduleHeading">一体化学习模块 1–11 · 计算机 + 英语 + 作答 <span class="module-current" id="moduleCurrent">当前模块：01 / 11</span></h3><p class="module-legend">每个模块都按同一顺序学习：先看最简单的中文解释，再看计算机动作和证据，接着学习本模块的英文词、短句与语法，最后分别提交计算机回答和英语回答。两个回答都会保存到你的个人记忆库，自动预审后等待老师批改。</p><div class="module-nav" id="moduleNav"></div><div class="integrated-modules" id="integratedModules"></div><div id="layerList"></div></div>
+        <div class="contract-section"><h3>Lv1–Lv5 闯关提交</h3><div class="level-list" id="levelList"></div></div>
+        <div class="contract-section"><h3>五个实战 Lab</h3><div class="lab-list" id="labList"></div></div>
+        <div class="contract-section"><h3>五个检查点与答辩</h3><div class="checkpoint-list" id="checkpointList"></div><div id="oralDefenseList" class="defense-list" aria-live="polite"></div></div>
+      </section>
+      <section class="history-panel" aria-label="学习记忆"><h2>学习记忆 · 老师下次从这里接着教</h2><p id="historySummary">正在读取本节的回答、英语练习和待验收状态…</p></section>
+      <section class="flow-nav" id="flowNav" aria-label="闯关导航">
+        <div class="flow-nav-head"><div><div class="eyebrow">Next checkpoint · 下一步</div><h2 id="flowTitle">开始 Lv1 · 新手村</h2><p id="flowDescription">先完成本课讲解，再提交 Lv1 证据。按钮会把你带到下一关。</p></div><span class="flow-progress" id="flowProgress">Lv1 / 5</span></div>
+        <div class="flow-actions"><button class="primary" id="nextLevelBtn" type="button">定位到 Lv1 提交区 ↓</button><a class="flow-button" id="previousCourseBtn" href="#" hidden>← 上一节</a><a class="flow-button" id="nextCourseBtn" href="#" hidden>下一节课程 →</a><a class="flow-link" href="学习主页.html">返回学习主页</a></div>
+        <p class="flow-note" id="flowNote">导航只负责带你前进；提交证据后会保存到记忆库，老师人工验收通过后才更新掌握状态。你也可以随时从主页或总目录打开任意课程。</p>
+      </section>
+    </main>
+    <aside>
+      <div class="side-section"><h2>课堂进度</h2><div class="meter"><span>本段课堂</span><span id="percent">0%</span></div><div class="bar"><span id="sideBar"></span></div><div class="status" style="margin-top:14px"><i class="dot" id="statusDot"></i><span id="sideStatus">等待开始</span></div></div>
+      <div class="side-section"><h2>Five words · 五个词</h2><div class="terms"><div class="term"><b>input</b><em>输入</em></div><div class="term"><b>process</b><em>处理</em></div><div class="term"><b>memory</b><em>内存</em></div><div class="term"><b>storage</b><em>存储</em></div><div class="term"><b>output</b><em>输出</em></div></div></div>
+      <div class="side-section"><h2>陪伴规则</h2><p class="rule">每次只学一个小块。遇到问题就暂停、重播或说“回到上一个概念”。身体疲劳或不适时，直接休息，不影响你的课程进度。</p></div>
+      <div><h2>下一步</h2><p class="rule" id="nextStep">完成预测题后，继续认识 CPU、内存和存储。</p></div>
+    </aside>
+  </div>
+  <script>
+    const courseId = (new URLSearchParams(window.location.search).get('course_id') || 'PRE0').replace(/[^A-Za-z0-9-]/g,'') || 'PRE0';
+    const audioPrefix = courseId === 'PRE0' ? 'PRE0-第一段-segments/' : '';
+    const answerKey = courseId.toLowerCase()+'-answer'; const phaseKey = courseId.toLowerCase()+'-phase';
+    let lesson = {lesson_id:courseId+'-generated-01', course_id:courseId, title:courseId, turns:[], question_turn_index:7};
+    let turns = [], index = -1, slow = false, pausedForQuestion = false, currentAudio = null, fallbackUtterance = null, fallbackPaused = false;
+    let englishLesson = {title:'Computer English', level:'A0 → A1', words:[], grammar:{}, exercises:[], platform_routine:[]}, exerciseIndex = 0;
+    // Keep every answer, result and current position local so question changes and
+    // offline sessions never discard the learner's work.
+    let englishExerciseState = {};
+    const englishProgressKey = 'english-progress-'+courseId.toLowerCase();
+    function loadEnglishProgress() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(englishProgressKey) || 'null');
+        if (saved && (Number.isInteger(saved.index) || Number.isInteger(saved.exerciseIndex))) exerciseIndex = Math.max(0, Number.isInteger(saved.index) ? saved.index : saved.exerciseIndex);
+        if (saved && saved.state && typeof saved.state === 'object') englishExerciseState = saved.state;
+      } catch (_) { englishExerciseState = {}; }
+    }
+    function saveEnglishProgress() {
+      try { localStorage.setItem(englishProgressKey, JSON.stringify({index:exerciseIndex,exerciseIndex,state:englishExerciseState,updated_at:new Date().toISOString()})); } catch (_) {}
+    }
+    let moduleAnswerState = {};
+    let defenseAnswerState = {};
+    let defenseItems = [];
+    let defenseIndex = 0;
+    loadEnglishProgress();
+    loadModuleProgress();
+    let navigation = {course_index:1, total_courses:590, previous:null, next:null};
+    let submittedGateIds = new Set();
+    let submittedEnglishIds = new Set(), englishHintUsed = false;
+    const levelLabels = {Lv1:'新手村', Lv2:'熟练工', Lv3:'进阶者', Lv4:'高手', Lv5:'宗师'};
+    let videoResources = {enabled:false, items:[]};
+    const $ = id => document.getElementById(id);
+    const cachePrefix = 'classroom-cache-'+courseId+'-';
+    function cachePayload(key, payload) { try { localStorage.setItem(cachePrefix+key, JSON.stringify(payload)); } catch (_) {} }
+    function readCachedPayload(key) { try { const raw=localStorage.getItem(cachePrefix+key); return raw ? JSON.parse(raw) : null; } catch (_) { return null; } }
+    async function fetchCachedJson(url, key) {
+      try {
+        const response = await fetch(url); const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.message || '请求失败');
+        cachePayload(key, payload); return payload;
+      } catch (error) {
+        const cached = readCachedPayload(key);
+        if (cached) { cached.offline = true; return cached; }
+        return {ok:false, offline:true, message:error.message};
+      }
+    }
+    function updateOfflineBanner(offlineUsed=false) {
+      const banner=$('offlineBanner'); const text=$('offlineBannerText');
+      const offline=!navigator.onLine || offlineUsed;
+      banner.classList.toggle('warn', offline);
+      $('offlineBanner').querySelector('strong').textContent = offline ? '本地离线模式' : '本地课堂已准备';
+      text.textContent = offline ? '课程、英语课件和已有学习记录可继续使用；云端老师、远程视频和云端语音会在联网后恢复。' : '课程、英语课件和学习记录保存在本机；云端老师和远程视频需要联网。';
+    }
+    const transcript = $('transcript');
+    const taskNames = ['listen','predict','answer','recall','lab'];
+
+    function speakText(text, lang='en-GB') {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text); utterance.lang = lang; utterance.rate = slow ? .78 : .95; window.speechSynthesis.speak(utterance);
+    }
+
+    function setStatus(text, playing=false) { $('teacherStatus').textContent=text; $('sideStatus').textContent=text; $('statusDot').classList.toggle('playing', playing); }
+    function setTask(name, state) {
+      const node = document.querySelector('[data-task="'+name+'"]');
+      if (!node) return;
+      node.classList.toggle('active', state === 'active');
+      node.classList.toggle('done', state === 'done');
+      const label = node.querySelector('.task-state');
+      label.textContent = state === 'done' ? '完成' : state === 'active' ? '当前' : '待开始';
+    }
+    function setCurrentTask(name) { taskNames.forEach(task => setTask(task, task === name ? 'active' : 'pending')); }
+    function buildTurns(rawTurns) {
+      return rawTurns.map((turn, i) => ({
+        lang: turn.language === 'zh' ? 'zh' : 'en',
+        label: turn.language === 'zh' ? '中文' : 'ENGLISH',
+        text: turn.text,
+        zh: turn.language === 'en' && rawTurns[i + 1]?.language === 'zh' ? rawTurns[i + 1].text : ''
+      }));
+    }
+    function renderTranscript() {
+      transcript.innerHTML = '';
+      turns.forEach((turn, i) => {
+        const row = document.createElement('div'); row.className = 'turn '+turn.lang; row.id = 'turn-'+i;
+        const lang = document.createElement('div'); lang.className = 'lang'; lang.textContent = turn.label;
+        const body = document.createElement('div'); const text = document.createElement('p'); text.textContent = turn.text; body.appendChild(text);
+        if (turn.lang === 'en' && turn.zh) { const translation = document.createElement('p'); translation.className = 'translation'; translation.textContent = turn.zh; body.appendChild(translation); }
+        row.append(lang, body); transcript.appendChild(row);
+      });
+    }
+    function renderLessonHeader() {
+      const rawTitle = lesson.title || courseId;
+      const slash = rawTitle.indexOf(' / ');
+      const heading = slash > 0 ? rawTitle.slice(0, slash) : rawTitle;
+      const subtitle = slash > 0 ? rawTitle.slice(slash + 3) : 'Computer science lesson · 计算机课程';
+      $('pageTitle').textContent = courseId+' · 双语语音课堂'; $('courseEyebrow').textContent='Computer Science · '+courseId; $('courseHeading').textContent=heading; $('courseSubtitle').textContent=subtitle; $('lessonTitle').textContent=rawTitle;
+      $('coursePosition').textContent='第 '+(navigation.course_index || '?')+' / '+(navigation.total_courses || 590)+' 节';
+      const prompt = lesson.question_prompt || 'Please pause and predict: what is the input, the process, and the observable output?\n请暂停并预测：什么是输入、处理和可观察的输出？'; $('questionPrompt').innerHTML = prompt.replace(/\n/g,'<br>');
+    }
+    function renderEnglish() {
+      $('englishTitle').textContent = englishLesson.title || 'Computer English';
+      $('englishLevel').textContent = englishLesson.level || 'A0 → A1';
+      const stage = englishLesson.stage || {};
+      $('roadmapStage').textContent = stage.id ? stage.id+' · '+stage.label : (englishLesson.level || 'A0');
+      $('roadmapGrammar').textContent = stage.grammar_scope ? '语法范围：'+stage.grammar_scope : '正在建立本阶段语法范围。';
+      const target = englishLesson.vocabulary_target || {};
+      $('roadmapWords').textContent = (target.new_words != null ? '本课新词 '+target.new_words+' · 复习 '+(target.review_words || 0)+' · 累计 '+Number(target.cumulative_target || stage.word_target || 0).toLocaleString() : (stage.word_target ? Number(stage.word_target).toLocaleString()+' 词' : '—'));
+      $('roadmapCourses').textContent = stage.course_index ? '第 '+stage.course_index+' / '+stage.total_courses+' 节' : '—';
+      $('roadmapReading').textContent = stage.reading_task || '逐词朗读并找出主语、动词和宾语。';
+      $('roadmapWriting').textContent = stage.writing_task || '写一句与本课概念有关的英文。';
+      const stageIds = ['A0','A1','A2','B1','B2','C1','C2','C2+']; const bar = $('stageBar'); bar.innerHTML = stageIds.map(id=>'<i class="'+(id===stage.id?'active':'')+'" title="'+id+'"></i>').join('');
+      const words = englishLesson.words || []; const grid = $('wordGrid'); grid.innerHTML = '';
+      words.forEach(item => { const card = document.createElement('article'); card.className='word-card'; card.innerHTML='<b></b><span class="ipa"></span><span class="meaning"></span><span class="pos"></span><p></p><em></em><div class="word-actions"><button type="button" class="word-speak">朗读单词</button><button type="button" class="word-example-speak">朗读例句</button></div>'; card.querySelector('b').textContent=item.word; card.querySelector('.ipa').textContent=item.ipa || '点击朗读按钮听音'; card.querySelector('.meaning').textContent=item.meaning; card.querySelector('.pos').textContent=item.part_of_speech || ''; card.querySelector('p').textContent=item.example || ''; card.querySelector('em').textContent=item.translation || ''; card.title='点击朗读英文单词或例句'; card.querySelector('.word-speak').addEventListener('click',(event)=>{event.stopPropagation(); speakText(item.word, 'en-GB');}); card.querySelector('.word-example-speak').addEventListener('click',(event)=>{event.stopPropagation(); speakText(item.example || item.word, 'en-GB');}); card.addEventListener('click',()=>speakText(item.word, 'en-GB')); grid.appendChild(card); });
+      const grammar = englishLesson.grammar || {}; $('grammarPattern').textContent=grammar.pattern || 'Subject + verb + object'; $('grammarExplanation').textContent=grammar.explanation || ''; $('grammarExample').textContent=(grammar.example || '')+' · '+(grammar.translation || '');
+      const routine=englishLesson.platform_routine || englishLesson.practice_path || [];
+      $('platformRoutine').textContent=(Array.isArray(routine)?routine:[routine]).filter(Boolean).join(' → ') || '看例句 → 键盘回忆 → 即时反馈 → 重试/提示 → 翻译、阅读与写作 → 间隔复习';
+      exerciseIndex=Math.min(Math.max(0,exerciseIndex),Math.max(0,(englishLesson.exercises||[]).length-1));
+      const previous=$('englishPreviousCourse'), next=$('englishNextCourse');
+      if (previous) previous.hidden = true;
+      if (next) next.hidden = true;
+      renderEnglishModuleLessons();
+      renderIntegratedModules();
+      renderExercise();
+    }
+    const escHtml = value => String(value ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]));
+    function safeResourceUrl(value, allowRelative=false) {
+      const raw = String(value || '').trim();
+      if (!raw || raw.startsWith('javascript:') || raw.startsWith('data:')) return '';
+      try {
+        const url = new URL(raw, window.location.href);
+        if (url.protocol === 'https:' || url.protocol === 'http:') {
+          if (allowRelative && !/^https?:\/\//i.test(raw) && raw.includes('..')) return '';
+          return url.href;
+        }
+      } catch (error) { return ''; }
+      return '';
+    }
+    function renderVideos(payload) {
+      videoResources = payload?.videos || {enabled:false, items:[]};
+      const list = $('videoList'); const items = videoResources.items || [];
+      list.innerHTML = '';
+      $('videoBadge').textContent = videoResources.enabled ? (items.length ? items.length+' 个辅助资源' : '已启用 · 待配置') : '未启用';
+      if (!videoResources.enabled) { list.innerHTML='<p class="video-empty">视频辅助未启用。你可以按“视频课件配置说明”配置本地 MP4、合法嵌入地址或官方课程页面。</p>'; return; }
+      if (!items.length) { list.innerHTML='<p class="video-empty">本课暂时没有匹配视频。课程本身仍可完整学习；可在视频课件配置.json 中按课号、前缀或类别添加资源。</p>'; return; }
+      items.forEach(item => {
+        const card=document.createElement('article'); card.className='video-card';
+        const title=document.createElement('h3'); title.textContent=item.title || '未命名视频'; card.appendChild(title);
+        if(item.description){const desc=document.createElement('p'); desc.textContent=item.description; card.appendChild(desc);}
+        const meta=document.createElement('div'); meta.className='video-meta'; if(item.provider){const provider=document.createElement('span');provider.textContent='来源：'+item.provider;meta.appendChild(provider);} if(item.duration){const duration=document.createElement('span');duration.textContent='时长：'+item.duration;meta.appendChild(duration);} if(item.captions){const captions=document.createElement('span');captions.textContent='字幕：'+item.captions;meta.appendChild(captions);} if(meta.childElementCount)card.appendChild(meta);
+        const embed=safeResourceUrl(item.embed_url); const local=safeResourceUrl(item.local_path,true); const watch=safeResourceUrl(item.watch_url);
+        if(embed){const frame=document.createElement('div');frame.className='video-frame';const iframe=document.createElement('iframe');iframe.src=embed;iframe.title=item.title || '课堂视频';iframe.loading='lazy';iframe.referrerPolicy='strict-origin-when-cross-origin';iframe.allowFullscreen=true;frame.appendChild(iframe);card.appendChild(frame);}
+        else if(local){const frame=document.createElement('div');frame.className='video-frame';const video=document.createElement('video');video.controls=true;video.preload='metadata';video.src=local;video.setAttribute('aria-label',item.title || '课堂视频');frame.appendChild(video);card.appendChild(frame);}
+        const actions=document.createElement('div'); actions.className='video-actions'; if(watch){const link=document.createElement('a');link.className='video-link';link.href=watch;link.target='_blank';link.rel='noopener noreferrer';link.textContent=embed||local?'打开备用来源 ↗':'打开官方资源 ↗';actions.appendChild(link);} if(!embed&&!local&&!watch){const noLink=document.createElement('span');noLink.className='video-empty';noLink.textContent='此条目还没有可播放地址，请在配置文件中补充。';actions.appendChild(noLink);} if(actions.childElementCount)card.appendChild(actions);
+        list.appendChild(card);
+      });
+    }
+    function moduleEnglishFor(index) {
+      const layer = (lesson.contract?.layers || [])[index - 1];
+      if (layer && layer.english) return layer.english;
+      const syllabus = englishLesson.syllabus;
+      if (syllabus) return {words: syllabus.words || [], article: syllabus.grammar || '', sentence: syllabus.sentence || '', translation: syllabus.translation || ''};
+      const words = englishLesson.words || [];
+      const picked = [words[(index - 1) % Math.max(words.length, 1)], words[index % Math.max(words.length, 1)]].filter(Boolean);
+      return {words: picked, article: englishLesson.grammar?.explanation || '', sentence: englishLesson.grammar?.example || 'I am here.', translation: englishLesson.grammar?.translation || '我在这里。'};
+    }
+    function renderEnglishModuleLessons() {
+      const container = $('englishModuleLessons');
+      if (!container) return;
+      const layers = lesson.contract?.layers || [];
+      if (!layers.length) { container.innerHTML = ''; return; }
+      container.innerHTML = layers.map((layer, i) => {
+        const index = i + 1; const id = layer.id || ('module-'+String(index).padStart(2,'0')); const en = moduleEnglishFor(index) || {};
+        const state = moduleState(id, 'en'); const words = en.words || [];
+        const terms = words.map(item => item.word || item).join(',');
+        const wordsText = words.map(item => (item.word || item)+' '+(item.ipa || '')+' = '+(item.meaning || '本课词汇')).join(' · ');
+        return `<article class="english-module-card" id="english-module-${escHtml(id)}"><h4>计算机模块 ${String(index).padStart(2,'0')} · ${escHtml((layer.name || '本模块').replace(/^\d+\s*[·.]?\s*/,''))}</h4><p><strong>本模块词汇与音标：</strong><span class="module-english-words">${escHtml(wordsText)}</span></p><p><strong>老师讲解：</strong>${escHtml(en.beginner_explanation || '先听、再跟读，最后独立输入。')}</p><p><strong>语法与句型：</strong>${escHtml(en.article || '')}</p><p><strong>例句：</strong><button type="button" class="module-speak" data-speak="${escHtml(en.sentence || '')}" title="朗读本模块例句">朗读</button> ${escHtml(en.sentence || '')} · ${escHtml(en.translation || '')}</p><p><strong>练习顺序：</strong>${escHtml((en.practice || []).join(' → '))}</p><textarea data-module-answer="${escHtml(id)}" data-language="en" placeholder="先照着例句输入，再自己替换一个词"></textarea><div class="module-form-actions"><button type="button" class="primary module-submit" data-module-id="${escHtml(id)}" data-language="en" data-terms="${escHtml(terms)}">提交本模块英语回答</button><span class="module-feedback" data-feedback="${escHtml(id)}-en">${escHtml(state.feedback || '尚未提交')}${state.score == null ? '' : ' · 自动预审 '+state.score+' 分'}</span></div></article>`;
+      }).join('');
+      container.querySelectorAll('.module-speak').forEach(button => button.addEventListener('click', () => speakText(button.dataset.speak, 'en-GB')));
+      container.querySelectorAll('.module-submit').forEach(button => button.addEventListener('click', () => submitModuleAnswer(button)));
+      container.querySelectorAll('[data-module-answer]').forEach(field => {
+        const key = field.dataset.moduleAnswer+'-'+field.dataset.language; const saved = moduleAnswerState[key]?.answer;
+        if (saved) field.value = saved;
+        field.addEventListener('input', () => { moduleAnswerState[key] = Object.assign({}, moduleAnswerState[key], {answer:field.value}); saveModuleProgress(); });
+      });
+    }
+    function moduleState(id, language) {
+      return moduleAnswerState[id+'-'+language] || {};
+    }
+    function renderIntegratedModules() {
+      const container = $('integratedModules');
+      if (!container) return;
+      const layers = englishLesson?.stage ? (lesson.contract?.layers || []) : (lesson.contract?.layers || []);
+      if (!layers.length) { container.innerHTML = '<p class="rule">本课模块正在生成，请稍后刷新。</p>'; return; }
+      container.innerHTML = layers.map((layer, i) => {
+        const index = i + 1; const id = layer.id || ('module-'+String(index).padStart(2,'0')); const en = moduleEnglishFor(index);
+        const zhState = moduleState(id, 'zh'); const enState = moduleState(id, 'en');
+        const title = String(layer.name || ('模块 '+index)).replace(/^\d+\s*[·.]?\s*/, '');
+        const beginner = layer.beginner || '我们把这个模块拆成一个小目标、一个动作和一个可以检查的结果。';
+        const zhFeedback = zhState.feedback || '尚未提交'; const enFeedback = enState.feedback || '尚未提交';
+        const zhScore = zhState.score == null ? '' : ` · 自动预审 ${zhState.score} 分`;
+        const enScore = enState.score == null ? '' : ` · 自动预审 ${enState.score} 分`;
+        return `<article class="integrated-module" id="integrated-${id}" data-module-id="${escHtml(id)}">
+          <div class="integrated-module-head"><h4>模块 ${String(index).padStart(2,'0')} · ${escHtml(title)}</h4><span>第 ${index} / ${layers.length} 个模块</span></div>
+          <div class="module-beginner"><strong>基础理解</strong><p>${escHtml(beginner)}</p></div>
+          <div class="module-knowledge"><strong>计算机知识</strong><p>${escHtml(layer.teaching || '')}</p><p class="teacher-script"><strong>老师讲解：</strong>${escHtml(layer.teacher_explanation || '我们先用最简单的话理解，再用一个小动作验证。')}</p></div>
+          <div class="module-action"><strong>现在做一个小动作：</strong><p>${escHtml(layer.action || '用自己的话说出你观察到的输入、变化和结果。')}</p></div>
+          <div class="module-forms">
+            <div class="module-form"><h5>计算机回答框</h5><p>用中文或你会的英文，写出：这个模块讲了什么？输入是什么？电脑发生了什么？结果是什么？</p><textarea data-module-answer="${escHtml(id)}" data-language="zh" placeholder="先写最简单的一句话也可以"></textarea><div class="module-form-actions"><button type="button" class="primary module-submit" data-module-id="${escHtml(id)}" data-language="zh" data-terms="输入,处理,输出,结果,观察">提交计算机回答</button><span class="module-feedback" data-feedback="${escHtml(id)}-zh">${escHtml(zhFeedback)}${escHtml(zhScore)}</span></div></div>
+          </div>
+        </article>`;
+      }).join('');
+      container.querySelectorAll('.module-speak').forEach(button => button.addEventListener('click', () => speakText(button.dataset.speak, 'en-GB')));
+      container.querySelectorAll('.module-submit').forEach(button => button.addEventListener('click', () => submitModuleAnswer(button)));
+      container.querySelectorAll('[data-module-answer]').forEach(field => {
+        const key = field.dataset.moduleAnswer+'-'+field.dataset.language; const saved = moduleAnswerState[key]?.answer;
+        if (saved) field.value = saved;
+        field.addEventListener('input', () => { moduleAnswerState[key] = Object.assign({}, moduleAnswerState[key], {answer:field.value}); saveModuleProgress(); });
+      });
+    }
+    function saveModuleProgress() { try { localStorage.setItem('module-progress-'+courseId.toLowerCase(), JSON.stringify(moduleAnswerState)); } catch (_) {} }
+    function loadModuleProgress() { try { const saved = JSON.parse(localStorage.getItem('module-progress-'+courseId.toLowerCase()) || '{}'); if (saved && typeof saved === 'object') moduleAnswerState = saved; } catch (_) { moduleAnswerState = {}; } }
+    function loadDefenseProgress() { try { const saved = JSON.parse(localStorage.getItem('defense-progress-'+courseId.toLowerCase()) || '{}'); if (saved && typeof saved === 'object') { defenseAnswerState = saved.state && typeof saved.state === 'object' ? saved.state : {}; defenseIndex = Math.max(0, Number(saved.index) || 0); } } catch (_) { defenseAnswerState = {}; defenseIndex = 0; } }
+    function saveDefenseProgress() { try { localStorage.setItem('defense-progress-'+courseId.toLowerCase(), JSON.stringify({index:defenseIndex,state:defenseAnswerState,updated_at:new Date().toISOString()})); } catch (_) {} }
+    loadDefenseProgress();
+    async function submitModuleAnswer(button) {
+      const id = button.dataset.moduleId; const language = button.dataset.language; const field = document.querySelector(`[data-module-answer="${id}"][data-language="${language}"]`); const feedback = document.querySelector(`[data-feedback="${id}-${language}"]`); const answer = field?.value.trim() || '';
+      if (!answer) { if (feedback) feedback.textContent = '先写一句自己的话'; return; }
+      button.disabled = true; if (feedback) feedback.textContent = '正在自动校对并保存…';
+      const terms = (button.dataset.terms || '').split(',').filter(Boolean);
+      try {
+        const response = await fetch('/api/module-answer', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId,module_id:id,module_index:Number(id.replace(/\D/g,''))||1,language,answer,rubric_terms:terms})});
+        const result = await response.json(); if (!response.ok || !result.ok) throw new Error(result.message || '保存失败');
+        const score = result.auto_screen?.score; moduleAnswerState[id+'-'+language] = {answer, feedback:result.message || '已保存，等待老师批改', score, notes:result.auto_screen?.notes || [], submitted:true}; saveModuleProgress(); if (feedback) feedback.textContent = (result.message || '已保存') + (score == null ? '' : ` · 自动预审 ${score} 分`); document.querySelector(`#integrated-${id}`)?.classList.add('completed');
+      } catch (error) { moduleAnswerState[id+'-'+language] = Object.assign({}, moduleAnswerState[id+'-'+language], {answer,feedback:'已暂存在本机：'+error.message}); saveModuleProgress(); if (feedback) feedback.textContent = '已暂存在本机：'+error.message+'；联网后可再次提交'; }
+      finally { button.disabled = false; }
+    }
+    function nextIncompleteLevel() {
+      for (let number=1; number<=5; number+=1) {
+        if (!submittedGateIds.has('Lv'+number)) return number;
+      }
+      return 6;
+    }
+    function scrollToLevel(number) {
+      const target = document.getElementById('level-Lv'+number);
+      if (!target) return;
+      document.querySelectorAll('.level-item.flow-target').forEach(node=>node.classList.remove('flow-target'));
+      target.classList.add('flow-target');
+      target.scrollIntoView({behavior:'smooth', block:'start'});
+      const field = target.querySelector('[data-evidence]');
+      if (field) window.setTimeout(()=>field.focus(), 350);
+    }
+    function renderFlowNavigation() {
+      const nextLevel = nextIncompleteLevel();
+      const title = $('flowTitle'); const description = $('flowDescription'); const progress = $('flowProgress'); const button = $('nextLevelBtn'); const note = $('flowNote');
+      if (!title || !description || !progress || !button) return;
+      $('levelBadge').textContent = nextLevel <= 5 ? 'Lv'+nextLevel+' · '+levelLabels['Lv'+nextLevel] : 'Lv5 · '+levelLabels.Lv5;
+      if (nextLevel <= 5) {
+        const previous = nextLevel - 1;
+        title.textContent = previous > 0 ? 'Lv'+previous+' 已提交，进入 Lv'+nextLevel+' · '+levelLabels['Lv'+nextLevel] : '开始 Lv1 · 新手村';
+        description.textContent = previous > 0 ? '上一关证据已保存。先打开下一关的提交区，完成自己的观察、解释和证据。' : '先完成本课讲解，再打开 Lv1 提交区；提交后会出现进入 Lv2 的按钮。';
+        progress.textContent = '下一关：Lv'+nextLevel+' / 5';
+        button.hidden = false; button.disabled = false; button.textContent = previous > 0 ? '进入 Lv'+nextLevel+' · '+levelLabels['Lv'+nextLevel]+' ↓' : '定位到 Lv1 提交区 ↓';
+        button.onclick = ()=>scrollToLevel(nextLevel);
+        note.textContent = '提交只会保存你的真实证据并等待老师验收，不会自动把关卡标记为通过。课程导航可以继续使用。';
+      } else {
+        title.textContent = '五级闯关证据已提交，进入下一节课程';
+        description.textContent = 'Lv1–Lv5 的证据都已写入本课记录。Lab 和老师人工验收仍然独立进行。';
+        progress.textContent = 'Lv1–Lv5 已提交';
+        button.hidden = true;
+        note.textContent = '下一节只是学习路线导航，不代表本课已经验收通过；Lab、检查点和老师评语仍会保留在记忆库。';
+      }
+      const previousCourse = $('previousCourseBtn'); const nextCourse = $('nextCourseBtn');
+      if (navigation.previous) { previousCourse.hidden=false; previousCourse.href='课堂模式.html?course_id='+encodeURIComponent(navigation.previous.id); previousCourse.textContent='← 第 '+navigation.previous.index+' 节 · '+navigation.previous.id; } else previousCourse.hidden=true;
+      if (navigation.next) { nextCourse.hidden=false; nextCourse.href='课堂模式.html?course_id='+encodeURIComponent(navigation.next.id); nextCourse.textContent='下一节 '+navigation.next.id+' · '+String(navigation.next.title || '').slice(0,24)+' →'; } else { nextCourse.hidden=true; }
+    }
+    function renderContract(contract) {
+      const intro = $('contractIntro'); const badge = $('contractBadge');
+      if (!contract || !contract.available) { intro.textContent='本课暂时没有可读取的深度合同，仍可完成双语讲解和英语训练。'; badge.textContent='通用课堂'; return; }
+      badge.textContent=(contract.levels || []).length+' 级 · '+(contract.labs || []).length+' Lab';
+      intro.textContent='机制：'+(contract.mechanism || '待补')+' 前置：'+(contract.prerequisites || '未记录');
+      const facts=[['不变量',contract.invariant],['测量指标',contract.metric],['失败实验',contract.failure],['复杂度出口',contract.complexity],['研究问题',contract.research_question]];
+      $('contractFacts').innerHTML=facts.filter(item=>item[1]).map(item=>'<div class="fact"><b>'+escHtml(item[0])+'</b><span>'+escHtml(item[1])+'</span></div>').join('');
+      const layers=contract.layers || []; const layerCount=layers.length || 0; $('lectureCount').textContent='一体化模块 '+layerCount; $('moduleHeading').childNodes[0].textContent=layerCount ? '一体化学习模块 1–'+layerCount+' · 点击编号定位 ' : '一体化学习模块 '; $('moduleCurrent').textContent=layerCount ? '当前模块：01 / '+layerCount : '当前模块：—'; $('moduleNav').innerHTML=layers.map((layer,i)=>'<button type="button" data-module-target="'+(i+1)+'">'+String(i+1).padStart(2,'0')+' · '+escHtml((layer.name || '模块').replace(/^\d+\s*[·.]?\s*/,''))+'</button>').join(''); $('layerList').innerHTML=layers.map((layer, i)=>'<details class="layer" id="module-layer-'+(i+1)+'" '+(i===0?'open':'')+'><summary>模块 '+String(i+1).padStart(2,'0')+' / '+layerCount+' · '+escHtml((layer.name || ('第 '+(i+1)+' 段')).replace(/^\d+\s*[·.]?\s*/,''))+'</summary><div class="layer-body"><p><strong>讲授：</strong>'+escHtml(layer.teaching)+'</p><p><strong>动作：</strong>'+escHtml(layer.action)+'</p><p><strong>证据：</strong>'+escHtml(layer.evidence)+'</p></div></details>').join('') || '<p class="rule">暂无讲授层数据。</p>';
+      document.querySelectorAll('[data-module-target]').forEach(button=>button.addEventListener('click',()=>{const number=Number(button.dataset.moduleTarget);const target=document.getElementById('integrated-module-'+String(number).padStart(2,'0'));if(!target)return;document.querySelectorAll('[data-module-target]').forEach(node=>node.classList.toggle('active',node===button));$('moduleCurrent').textContent='当前模块：'+String(number).padStart(2,'0')+' / '+layerCount;target.scrollIntoView({behavior:'smooth',block:'start'});})); const firstModule=document.querySelector('[data-module-target="1"]'); if(firstModule)firstModule.classList.add('active');
+      const stepsHtml = steps => Array.isArray(steps) && steps.length ? '<ol class="teacher-steps">'+steps.map(step=>'<li>'+escHtml(step)+'</li>').join('')+'</ol>' : '';
+      $('levelList').innerHTML=(contract.levels || []).map(level=>'<article class="level-item" id="level-'+escHtml(level.id)+'"><b>'+escHtml(level.id)+'</b><p>'+escHtml(level.text)+'</p><div class="teacher-guide"><strong>'+escHtml(level.teacher_explanation || '老师讲解：先做一个小动作，再提交证据。')+'</strong>'+stepsHtml(level.steps)+'</div><div class="evidence-form" data-kind="gate" data-item="'+escHtml(level.id)+'"><textarea data-evidence placeholder="按上面的步骤写复述、预测、输出、解释和证据；不会可以逐步写"></textarea><div class="evidence-actions"><input data-command placeholder="命令 / 测试 / 证据路径（可选）"><button class="primary" data-submit-evidence>提交 '+escHtml(level.id)+'</button><span class="evidence-status" data-status></span></div></div></article>').join('');
+      $('labList').innerHTML=(contract.labs || []).map(lab=>'<article class="lab-item"><h4>'+escHtml(lab.id+' · '+lab.name)+'</h4><div class="teacher-guide"><strong>'+escHtml(lab.teacher_explanation || '老师讲解：按步骤完成一次可复现实验。')+'</strong>'+stepsHtml(lab.steps)+'</div><p><strong>输入：</strong>'+escHtml(lab.input)+'</p><p><strong>预期：</strong>'+escHtml(lab.expected)+'</p><div class="lab-meta"><span><strong>失败：</strong>'+escHtml(lab.failure)+'</span><span><strong>指标：</strong>'+escHtml(lab.metric)+'</span></div><div class="evidence-form" data-kind="lab" data-item="'+escHtml(lab.id)+'"><textarea data-evidence placeholder="按步骤记录原始命令、输出、退出码、解释、清理和未验证项"></textarea><div class="evidence-actions"><input data-command placeholder="命令或测试入口"><input data-artifact placeholder="制品路径（可选）"><button class="primary" data-submit-evidence>提交 '+escHtml(lab.id)+'</button><span class="evidence-status" data-status></span></div></div></article>').join('') || '<p class="rule">暂无 Lab 数据。</p>';
+      $('checkpointList').innerHTML=(contract.checkpoints || []).map((cp,i)=>{const id='checkpoint-'+(i+1);return '<article class="checkpoint-item"><h4>'+escHtml(cp.stage)+'</h4><div class="teacher-guide"><strong>'+escHtml(cp.teacher_explanation || '老师讲解：先回答，再给证据。')+'</strong>'+stepsHtml(cp.steps)+'</div><p><strong>题目：</strong>'+escHtml(cp.prompt)+'</p><p><strong>交付：</strong>'+escHtml(cp.deliverable)+'</p><p><strong>通过条件：</strong>'+escHtml(cp.gate)+'</p><div class="module-form" style="margin-top:10px"><h5>检查点回答</h5><textarea data-module-answer="'+id+'" data-language="zh" placeholder="按步骤回答题目，并写出你能提供的证据"></textarea><div class="module-form-actions"><button type="button" class="primary module-submit" data-module-id="'+id+'" data-language="zh" data-terms="证据,结果,原因,边界">提交检查点回答</button><span class="module-feedback" data-feedback="'+id+'-zh">尚未提交</span></div></div></article>';}).join('') || '<p class="rule">暂无检查点数据。</p>';
+      defenseItems = Array.isArray(contract.oral_defense) ? contract.oral_defense : [];
+      defenseIndex = Math.min(Math.max(0, defenseIndex), Math.max(0, defenseItems.length - 1));
+      renderDefense();
+      document.querySelectorAll('[data-submit-evidence]').forEach(button=>button.addEventListener('click',()=>submitEvidence(button)));
+      document.querySelectorAll('.module-submit').forEach(button=>button.addEventListener('click',()=>submitModuleAnswer(button)));
+      document.querySelectorAll('[data-module-answer]').forEach(field=>{const key=field.dataset.moduleAnswer+'-'+field.dataset.language;const saved=moduleAnswerState[key]?.answer;if(saved)field.value=saved;field.addEventListener('input',()=>{moduleAnswerState[key]=Object.assign({},moduleAnswerState[key],{answer:field.value});saveModuleProgress();});});
+      renderFlowNavigation();
+    }
+    function renderDefense() {
+      const container = $('oralDefenseList');
+      if (!container) return;
+      if (!defenseItems.length) { container.innerHTML = '<p class="rule">暂无答辩题目。</p>'; return; }
+      defenseIndex = Math.min(Math.max(0, defenseIndex), defenseItems.length - 1);
+      const item = defenseItems[defenseIndex] || {};
+      const id = 'defense-' + String(defenseIndex + 1);
+      const state = defenseAnswerState[id] || {};
+      const submitted = Boolean(state.submitted);
+      const question = typeof item === 'string' ? item : (item.question || '请说明本课的核心结论。');
+      const explanation = typeof item === 'string' ? '老师讲解：先说结论，再说证据、限制和下一步。' : (item.teacher_explanation || '老师讲解：先说结论，再说证据、限制和下一步。');
+      const steps = typeof item === 'string' ? [] : item.steps;
+      const answer = state.answer || '';
+      const status = state.feedback || (submitted ? '已提交并永久锁定；可用“上一题”回看。' : '尚未提交');
+      const submitLabel = submitted ? '已提交（已锁定）' : '提交答辩答案';
+      const stepsMarkup = Array.isArray(steps) && steps.length ? '<ol class="teacher-steps">'+steps.map(step=>'<li>'+escHtml(step)+'</li>').join('')+'</ol>' : '';
+      container.innerHTML = `<article class="defense-card${submitted ? ' is-submitted' : ''}" data-defense-id="${escHtml(id)}">
+        <div class="defense-head"><h4>答辩题 ${defenseIndex + 1} / ${defenseItems.length}</h4><span class="defense-count">${submitted ? '已保存 · 只读' : '等待回答'}</span></div>
+        <p class="defense-prompt">${escHtml(question)}</p>
+        <div class="teacher-guide"><strong>${escHtml(explanation)}</strong>${stepsMarkup}</div>
+        <div class="defense-chat-box"><label class="defense-chat-label" for="defense-answer">你的答辩回复（本题对话框）</label>
+        <textarea id="defense-answer" class="defense-answer" data-defense-answer aria-label="答辩回复输入框" placeholder="先用自己的话回答，再补充证据、限制和下一步。提交后本题会锁定，只能回看。"${submitted ? ' disabled' : ''}>${escHtml(answer)}</textarea></div>
+        <div class="defense-actions"><button type="button" class="primary defense-submit${submitted ? ' is-locked' : ''}"${submitted ? ' disabled' : ''}>${submitLabel}</button><span class="defense-status" data-defense-status>${escHtml(status)}</span></div>
+        <div class="defense-nav"><button type="button" data-defense-prev${defenseIndex === 0 ? ' disabled' : ''}>← 上一题</button><span class="defense-nav-note">答案会保存到本机记忆库</span><button type="button" data-defense-next${defenseIndex >= defenseItems.length - 1 ? ' disabled' : ''}>下一题 →</button></div>
+      </article>`;
+      const answerField = container.querySelector('[data-defense-answer]');
+      if (answerField && !submitted) answerField.addEventListener('input', () => { defenseAnswerState[id] = Object.assign({}, defenseAnswerState[id], {answer:answerField.value}); saveDefenseProgress(); });
+      container.querySelector('.defense-submit')?.addEventListener('click', event => submitDefense(event.currentTarget));
+      container.querySelector('[data-defense-prev]')?.addEventListener('click', () => { if (defenseIndex > 0) { defenseIndex -= 1; saveDefenseProgress(); renderDefense(); } });
+      container.querySelector('[data-defense-next]')?.addEventListener('click', () => { if (defenseIndex < defenseItems.length - 1) { defenseIndex += 1; saveDefenseProgress(); renderDefense(); } });
+    }
+    async function submitDefense(button) {
+      const card = button.closest('.defense-card');
+      if (!card) return;
+      const id = card.dataset.defenseId || ('defense-' + String(defenseIndex + 1));
+      const field = card.querySelector('[data-defense-answer]');
+      const answer = field?.value.trim() || '';
+      const status = card.querySelector('[data-defense-status]');
+      if (!answer) { if (status) status.textContent = '先写下你的答辩回复'; return; }
+      // Lock the local copy before the request so a network interruption can
+      // never turn a submitted answer back into an editable answer.
+      defenseAnswerState[id] = Object.assign({}, defenseAnswerState[id], {answer, submitted:true, feedback:'正在保存答辩答案…'});
+      saveDefenseProgress();
+      renderDefense();
+      try {
+        const item = defenseItems[defenseIndex] || {};
+        const question = typeof item === 'string' ? item : (item.question || '');
+        const response = await fetch('/api/defense', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({course_id:courseId, defense_id:id, defense_index:defenseIndex + 1, question, answer})});
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.message || '保存失败');
+        defenseAnswerState[id] = Object.assign({}, defenseAnswerState[id], {feedback:result.message || '已提交并永久锁定'});
+      } catch (error) {
+        defenseAnswerState[id] = Object.assign({}, defenseAnswerState[id], {feedback:'已暂存在本机并永久锁定：'+error.message+'；联网后可补写入服务器'});
+      }
+      saveDefenseProgress();
+      renderDefense();
+    }
+    async function submitEvidence(button) {
+      const form=button.closest('.evidence-form'); const evidence=form.querySelector('[data-evidence]').value.trim(); const command=form.querySelector('[data-command]')?.value.trim() || ''; const artifact=form.querySelector('[data-artifact]')?.value.trim() || ''; const status=form.querySelector('[data-status]');
+      if(!evidence){status.textContent='先写下这次观察或解释';return;}
+      button.disabled=true; status.textContent='正在保存证据…';
+      try { const route=form.dataset.kind==='lab'?'/api/lab':'/api/gate'; const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:courseId,item_id:form.dataset.item,answer:evidence,evidence,command,artifact})}); const result=await response.json(); if(!response.ok||!result.ok) throw new Error(result.message||'保存失败'); status.textContent=result.message; if(form.dataset.kind==='gate'){submittedGateIds.add(form.dataset.item);renderFlowNavigation();} } catch(error) { status.textContent='暂存失败：'+error.message+'；请保留文字稍后重试'; } finally { button.disabled=false; }
+    }
+    function renderExercise() {
+      const exercises = englishLesson.exercises || []; if (!exercises.length) { $('exerciseType').textContent='暂无练习'; $('exerciseCount').textContent='0 / 0'; $('exercisePrompt').textContent='本课英语练习正在生成，请稍后刷新。'; $('englishPrevBtn').disabled=true; $('englishNextBtn').disabled=true; return; }
+      exerciseIndex=Math.min(Math.max(0,exerciseIndex),exercises.length-1); const item = exercises[exerciseIndex];
+      const itemId=String(item.id || exerciseIndex); const state=englishExerciseState[itemId] || {};
+      $('exerciseType').textContent=(item.strand || item.type || 'practice')+' · '+(item.type || '英语练习'); $('exerciseCount').textContent=(exerciseIndex+1)+' / '+exercises.length; $('exercisePrompt').textContent=item.prompt || ''; $('englishStatus').textContent=state.feedback || ''; $('exerciseReview').textContent=item.review_mode==='teacher'?'开放题 · 提交后进入老师批改队列':'自动核对 · 提交后进入间隔复习'; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; $('englishPrevBtn').disabled=exerciseIndex===0;
+      const passage=$('readingPassage'); passage.textContent=item.passage || ''; passage.classList.toggle('show',Boolean(item.passage));
+      const draftKey='english-draft-'+courseId+'-'+(item.id||exerciseIndex); $('englishAnswer').value=state.answer || localStorage.getItem(draftKey) || '';
+      $('exerciseHint').textContent=item.hint || (Array.isArray(item.hints)?item.hints.join(' · '):'先独立回忆，再查看提示。'); $('exerciseHint').classList.toggle('show',Boolean(state.hintUsed)); $('englishHintBtn').textContent=state.hintUsed?'隐藏提示':'查看提示'; englishHintUsed=Boolean(state.hintUsed);
+      const nav=$('exerciseNav'); nav.innerHTML=''; exercises.forEach((entry,i)=>{const b=document.createElement('button');b.type='button';const done=isExerciseDone(entry);b.className='exercise-index-btn'+(i===exerciseIndex?' active ':'')+(done?' done':'');b.textContent=String(i+1);b.title=(entry.strand||entry.type||'练习')+' · '+(done?'已提交':'未提交');b.onclick=()=>{saveEnglishDraft();exerciseIndex=i;saveEnglishProgress();renderExercise();};nav.appendChild(b);});
+      saveEnglishProgress();
+    }
+    function isExerciseDone(item) { const id=String(item?.id || ''); return Boolean(id && submittedEnglishIds.has(id)) || Boolean(id && englishExerciseState[id]?.submitted); }
+    function saveEnglishDraft(){const exercises=englishLesson.exercises||[];const item=exercises[exerciseIndex];if(!item)return;const itemId=String(item.id||exerciseIndex);const value=$('englishAnswer').value;englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{answer:value});try{localStorage.setItem('english-draft-'+courseId+'-'+itemId,value);}catch(_){} saveEnglishProgress();}
+    async function submitEnglish() {
+      const exercises = englishLesson.exercises || []; const item = exercises[exerciseIndex]; const value=$('englishAnswer').value.trim(); if(!value){$('englishStatus').textContent='先写下你的答案';return;}
+      $('englishSubmitBtn').disabled=true; $('englishStatus').textContent='正在保存英语练习…';
+      const itemId=String(item.id||exerciseIndex); const attempt=Number(englishExerciseState[itemId]?.attempt || 0)+1;
+      try { const response=await fetch('/api/english',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({course_id:englishLesson.course_id || courseId,exercise_id:item.id,exercise_type:item.type,strand:item.strand,stage:englishLesson.stage?.id || '',review_mode:item.review_mode,expected:item.expected,answer:value,hint_used:englishHintUsed,attempt})}); const result=await response.json(); if(!response.ok||!result.ok) throw new Error(result.message || '保存失败'); submittedEnglishIds.add(itemId); englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{answer:value,submitted:true,feedback:result.message || '',correct:result.correct,review_mode:result.review || item.review_mode,attempt,hintUsed:englishHintUsed}); localStorage.removeItem('english-draft-'+courseId+'-'+itemId); $('englishStatus').textContent=result.message; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; renderExerciseNavOnly(); saveEnglishProgress(); } catch(error) { saveEnglishDraft(); englishExerciseState[itemId]=Object.assign({},englishExerciseState[itemId],{feedback:'已暂存在本机：'+error.message,attempt,hintUsed:englishHintUsed}); $('englishStatus').textContent='已暂存在本机：'+error.message+'；联网或重启本地服务后可再次提交'; $('englishNextBtn').disabled=exerciseIndex>=exercises.length-1; saveEnglishProgress(); } finally { $('englishSubmitBtn').disabled=false; }
+    }
+    function renderExerciseNavOnly(){document.querySelectorAll('.exercise-index-btn').forEach((b,i)=>{const item=(englishLesson.exercises||[])[i];const done=isExerciseDone(item);b.classList.toggle('done',done);b.title=(item?.strand||item?.type||'练习')+' · '+(done?'已提交':'未提交');});}
+    function continueFromQuestion() {
+      if (!pausedForQuestion && !$('questionBox').classList.contains('show')) return;
+      localStorage.setItem(phaseKey,'lesson-resumed'); $('questionBox').classList.remove('show'); $('questionContinueBtn').disabled=true; $('continueBtn').disabled=true; $('answerStatus').textContent=''; pausedForQuestion=false; setTask('answer','done'); setTask('recall','active'); playTurn(index+1);
+    }
+    function renderTurn(i) {
+      const t = turns[i]; if (!t) return;
+      document.querySelectorAll('.turn').forEach((n,j) => { n.classList.toggle('active',j===i); n.classList.toggle('done',j<i); });
+      $('nowLabel').textContent=t.label; $('nowText').textContent=t.text; $('nowTranslation').textContent=t.lang==='en' ? t.zh : 'English follows the same idea in the next line.';
+      $('turnCount').textContent=(i+1)+' / '+turns.length;
+      const p=Math.round(((i+1)/turns.length)*100); $('progressBar').style.width=p+'%'; $('sideBar').style.width=p+'%'; $('percent').textContent=p+'%';
+      if (i >= 0 && i < 8) setCurrentTask(i >= 6 ? 'predict' : 'listen');
+    }
+    function stopAudio() {
+      if (currentAudio) { currentAudio.pause(); currentAudio.currentTime=0; currentAudio=null; }
+      if (fallbackUtterance && window.speechSynthesis) { window.speechSynthesis.cancel(); fallbackUtterance=null; fallbackPaused=false; }
+    }
+    function speakFallback(turn, done) {
+      if (!window.speechSynthesis) { done(); return; }
+      fallbackUtterance = new SpeechSynthesisUtterance(turn.text); fallbackUtterance.lang = turn.lang === 'en' ? 'en-GB' : 'zh-CN'; fallbackUtterance.rate = slow ? .78 : 1;
+      fallbackUtterance.onend = () => { fallbackUtterance=null; fallbackPaused=false; done(); }; fallbackUtterance.onerror = () => { fallbackUtterance=null; fallbackPaused=false; done(); }; window.speechSynthesis.speak(fallbackUtterance);
+    }
+    function playTurn(i) {
+      if (i >= turns.length) { finish(); return; }
+      index=i; pausedForQuestion=false; renderTurn(i); stopAudio();
+      $('startBtn').disabled=true; $('pauseBtn').disabled=false; $('replayBtn').disabled=false; $('continueBtn').disabled=true; $('pauseBtn').textContent='Ⅱ 暂停';
+      setStatus('老师正在讲 '+turns[i].label+' · '+(slow?'慢速':'正常速度'),true);
+      const next = () => { currentAudio=null; if (i===Number(lesson.question_turn_index ?? 7)) { pausedForQuestion=true; $('questionBox').classList.add('show'); setTask('listen','done'); setTask('predict','done'); setTask('answer','active'); $('continueBtn').disabled=true; setStatus('暂停答题：先说出本课的核心因果链',false); $('answer').focus(); } else playTurn(i+1); };
+      if (!audioPrefix) { speakFallback(turns[i], next); return; }
+      const audio = new Audio(audioPrefix+String(i+1).padStart(3,'0')+'.wav'); currentAudio=audio; audio.playbackRate=slow?.82:1;
+      audio.onended=next; audio.onerror=()=>{ currentAudio=null; setStatus('本地音频不可用，正在使用浏览器语音回退',false); speakFallback(turns[i], next); };
+      audio.play().catch(()=>{ currentAudio=null; setStatus('浏览器阻止了音频，正在使用语音回退',false); speakFallback(turns[i], next); });
+    }
+    function finish() {
+      stopAudio(); $('startBtn').disabled=false; $('pauseBtn').disabled=true; $('continueBtn').disabled=true; $('questionBox').classList.remove('show');
+      localStorage.setItem(phaseKey,'lesson-complete');
+      setTask('answer','done'); setTask('recall','done'); setTask('lab','active'); setStatus('本段完成 · 下一步进入 Lab 1 留下真实证据',false);
+      $('nowLabel').textContent='COMPLETE'; $('nowText').textContent='Well done. Every computer action has input, a change of state, and an observable output.'; $('nowTranslation').textContent='完成得很好。每一个电脑动作都有输入、状态变化，以及可以观察到的输出。';
+      $('nextStep').textContent='课堂已完成。打开 evidence/'+courseId+'/labs/lab1/，运行最小操作链，并把命令、输出、解释和清理记录交给老师验收。';
+    }
+    async function loadClassroom() {
+      try {
+        const query = encodeURIComponent(courseId); const requestEntries=[['/api/lesson?course_id='+query,'lesson'],['/api/state','state'],['/api/english?course_id='+query,'english'],['/api/history?course_id='+query,'history'],['/api/navigation?course_id='+query,'navigation'],['/api/videos?course_id='+query,'videos']]; const payloads=await Promise.all(requestEntries.map(([url,key])=>fetchCachedJson(url,key))); const [lessonPayload,statePayload,englishPayload,historyPayload,navigationPayload,videosPayload]=payloads; const offlineUsed=payloads.some(payload=>payload?.offline);
+        if (navigationPayload.ok && navigationPayload.navigation) navigation=navigationPayload.navigation;
+        if (lessonPayload.ok) { lesson=lessonPayload.lesson; turns=buildTurns(lesson.turns || []); renderTranscript(); renderLessonHeader(); renderContract(lesson.contract || {}); $('courseCount').textContent=statePayload.state?.summary?.courses || 590; const gates=statePayload.state?.summary?.learner_gates; const labs=statePayload.state?.summary?.learner_labs; if(gates) $('gateCount').textContent=(gates.passed || 0)+'/'+(gates.total || 2950); if(labs) $('labCount').textContent=(labs.passed || 0)+'/'+(labs.total || 2950); $('voiceNote').textContent=(courseId==='PRE0'?'声音：本地课堂音频 · 英语先讲，中文紧跟':'声音：浏览器语音回退 · 英语先讲，中文紧跟 · 可继续替换为云端声线'); }
+        if (englishPayload.ok) { englishLesson=englishPayload.lesson; renderEnglish(); }
+        if (historyPayload.ok) { submittedEnglishIds=new Set((historyPayload.english || []).map(item=>String(item.exercise_id || '')).filter(Boolean)); (historyPayload.english || []).forEach(item=>{const id=String(item.exercise_id || '');if(!id)return;const current=englishExerciseState[id] || {};englishExerciseState[id]=Object.assign({},current,{submitted:true,answer:current.answer || item.answer || '',feedback:current.feedback || (item.review_mode==='teacher'?'答案已进入老师批改队列。':(item.correct?'答案与目标一致。':'已保存，请根据反馈重试。')),attempt:Math.max(Number(current.attempt || 0),Number(item.attempt || 0))});}); (historyPayload.modules || []).forEach(item=>{const id=String(item.module_id || '');const language=String(item.language || 'zh');if(!id)return;const key=id+'-'+language;moduleAnswerState[key]=Object.assign({},moduleAnswerState[key],{submitted:true,answer:moduleAnswerState[key]?.answer || item.answer || '',feedback:moduleAnswerState[key]?.feedback || '已保存，等待老师批改',score:item.auto_screen?.score});}); (historyPayload.defense || []).forEach(item=>{const id=String(item.defense_id || '');if(!id)return;defenseAnswerState[id]=Object.assign({},defenseAnswerState[id],{submitted:true,answer:defenseAnswerState[id]?.answer || item.answer || '',feedback:defenseAnswerState[id]?.feedback || '已提交并永久锁定；可用“上一题”回看。'});}); saveEnglishProgress(); saveModuleProgress(); saveDefenseProgress(); renderExercise(); renderEnglishModuleLessons(); renderIntegratedModules(); renderDefense(); }
+        if (videosPayload.ok) renderVideos(videosPayload);
+        if (historyPayload.ok) { submittedGateIds=new Set((historyPayload.gates || []).map(item=>String(item.item_id || '')).filter(item=>/^Lv[1-5]$/.test(item))); const answerCount=historyPayload.answers?.length || 0; const englishCount=historyPayload.english?.length || 0; const latest=historyPayload.answers?.at(-1)?.answer || ''; $('historySummary').innerHTML='本节已有 <strong>'+answerCount+'</strong> 次概念回答、<strong>'+englishCount+'</strong> 次英语练习记录和 <strong>'+submittedGateIds.size+'</strong> 个关卡证据提交，全部等待老师验收。'+(latest ? ' 最近一次概念回答已保存，下一次课堂会先从你的原句纠正本课概念和英语。' : ' 你提交后，老师会把原句、错误类型和下一次复习点一起保存。'); renderFlowNavigation(); const savedAnswer=localStorage.getItem(answerKey) || latest; const savedPhase=localStorage.getItem(phaseKey); if(savedAnswer && savedPhase !== 'lesson-complete'){index=Number(lesson.question_turn_index ?? 7);pausedForQuestion=true;renderTurn(index);$('answer').value=savedAnswer;$('englishHint').textContent=lesson.english_coaching || '英文可以先从 Subject + verb + object 开始写。';$('englishHint').classList.add('show');$('questionBox').classList.add('show');$('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;$('startBtn').disabled=true;$('replayBtn').disabled=false;setTask('listen','done');setTask('predict','done');setTask('answer','done');setTask('recall','active');setStatus('已恢复到上次回答后 · 点击题目下方继续下一段',false);} }
+        updateOfflineBanner(offlineUsed);
+      } catch (error) { updateOfflineBanner(true); setStatus('课堂已载入本地版本 · 状态服务暂时不可用',false); }
+    }
+    $('startBtn').onclick=()=>playTurn(index<0?0:index);
+    $('pauseBtn').onclick=()=>{ if(currentAudio){ if(currentAudio.paused){currentAudio.play();setStatus('继续播放',true);$('pauseBtn').textContent='Ⅱ 暂停';} else {currentAudio.pause();setStatus('已暂停',false);$('pauseBtn').textContent='▶ 播放';} } else if(fallbackUtterance && window.speechSynthesis){ if(fallbackPaused){window.speechSynthesis.resume();fallbackPaused=false;setStatus('继续播放',true);$('pauseBtn').textContent='Ⅱ 暂停';} else {window.speechSynthesis.pause();fallbackPaused=true;setStatus('已暂停',false);$('pauseBtn').textContent='▶ 播放';} } };
+    $('replayBtn').onclick=()=>{if(index>=0)playTurn(index);};
+    $('slowerBtn').onclick=()=>{slow=!slow;$('slowerBtn').textContent=slow?'▶ 正常速度':'◀ 慢一点';if(currentAudio)currentAudio.playbackRate=slow?.82:1;};
+    $('continueBtn').onclick=continueFromQuestion; $('questionContinueBtn').onclick=continueFromQuestion;
+    $('submitBtn').onclick=async()=>{const value=$('answer').value.trim();if(!value){$('answerStatus').textContent='先写一句你的预测';return;} localStorage.setItem(answerKey,value);localStorage.setItem(phaseKey,'answer-saved');$('submitBtn').disabled=true;$('answerStatus').textContent='正在写入学习记忆…';try{const response=await fetch('/api/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer:value,course_id:courseId,question_id:courseId+'-PREDICT-CORE'})});const result=await response.json();if(!response.ok)throw new Error(result.message||'保存失败');$('answerStatus').textContent=result.message;$('englishHint').textContent=result.language_coaching || ''; $('englishHint').classList.toggle('show',Boolean(result.language_coaching)); $('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;setTask('answer','done');setTask('recall','active');setStatus('回答已保存 · 点击题目下方“继续下一段”',false);}catch(error){$('answerStatus').textContent='答案已暂存在本页：'+error.message+'；仍可继续下一段';$('questionContinueBtn').disabled=false;$('continueBtn').disabled=false;}finally{$('submitBtn').disabled=false;}};
+    $('englishSubmitBtn').onclick=submitEnglish;
+    $('englishAnswer').addEventListener('input',saveEnglishDraft);
+    $('englishHintBtn').onclick=()=>{englishHintUsed=!englishHintUsed;const item=(englishLesson.exercises||[])[exerciseIndex];if(item){const id=String(item.id||exerciseIndex);englishExerciseState[id]=Object.assign({},englishExerciseState[id],{hintUsed:englishHintUsed});saveEnglishProgress();}$('exerciseHint').classList.toggle('show',englishHintUsed);$('englishHintBtn').textContent=englishHintUsed?'隐藏提示':'查看提示';};
+      $('englishSpeakBtn').onclick=()=>{const item=(englishLesson.exercises||[])[exerciseIndex];if(item){speakText(item.speak_text || ((item.passage?item.passage+' ':'')+(item.prompt||'')), 'en-GB');}};
+    $('englishPrevBtn').onclick=()=>{if(exerciseIndex>0){saveEnglishDraft();exerciseIndex-=1;renderExercise();}};
+    $('englishNextBtn').onclick=()=>{const exercises=englishLesson.exercises || []; if(exerciseIndex < exercises.length-1){saveEnglishDraft();exerciseIndex+=1;renderExercise();}else{$('englishStatus').textContent='本节英语训练完成。已保存你的答案；下一节会复习本节词汇并增加新句型。';$('englishNextBtn').disabled=true;saveEnglishProgress();}};
+    window.addEventListener('online',()=>updateOfflineBanner(false)); window.addEventListener('offline',()=>updateOfflineBanner(true)); updateOfflineBanner(!navigator.onLine); loadClassroom();
+  </script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "course_id": "PRE0",
+  "title": "Computer English 01 · Input, process, output",
+  "level": "A0 → A1",
+  "words": [
+    {"word": "input", "meaning": "输入", "part_of_speech": "noun", "example": "The keyboard is an input device.", "translation": "键盘是一种输入设备。"},
+    {"word": "process", "meaning": "处理；过程", "part_of_speech": "verb / noun", "example": "The computer processes the input.", "translation": "电脑处理输入的信息。"},
+    {"word": "output", "meaning": "输出；结果", "part_of_speech": "noun", "example": "The screen shows the output.", "translation": "屏幕显示输出结果。"},
+    {"word": "computer", "meaning": "电脑；计算机", "part_of_speech": "noun", "example": "A computer follows instructions.", "translation": "电脑遵循指令。"},
+    {"word": "screen", "meaning": "屏幕", "part_of_speech": "noun", "example": "The letter appears on the screen.", "translation": "字母出现在屏幕上。"}
+  ],
+  "grammar": {
+    "pattern": "Subject + verb + object",
+    "explanation": "英语最小陈述句常用“谁 + 做什么 + 对什么做”。",
+    "example": "The computer processes the input.",
+    "translation": "电脑处理输入的信息。"
+  },
+  "exercises": [
+    {"id": "PRE0-EN-WORD-01", "type": "word_recall", "prompt": "把中文“输入”写成英文单词。", "expected": "input"},
+    {"id": "PRE0-EN-SPELL-01", "type": "spelling", "prompt": "键盘听写挑战：不复制页面文字，独立输入 computer", "expected": "computer"},
+    {"id": "PRE0-EN-ORDER-01", "type": "word_order", "prompt": "把单词排成正确句子：processes / the input / The computer", "expected": "The computer processes the input."},
+    {"id": "PRE0-EN-WRITE-01", "type": "short_writing", "prompt": "用英文写一句：屏幕显示输出结果。", "expected": "The screen shows the output."}
+  ],
+  "platform_routine": [
+    "看例句并朗读",
+    "在输入框独立回忆并提交",
+    "根据反馈重试或查看提示",
+    "完成翻译、阅读与写作并进入间隔复习"
+  ]
+}

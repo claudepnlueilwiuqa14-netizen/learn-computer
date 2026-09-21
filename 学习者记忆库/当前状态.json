@@ -1,0 +1,25 @@
+{
+  "schema_version": "learner-memory-state-v1",
+  "generated_at": "2026-09-22T00:00:00+08:00",
+  "source": {
+    "course_matrix": "学习者记忆库/掌握矩阵.json",
+    "course_contracts": "逐课专属深度合同_590课.json",
+    "note": "公开仓库默认状态；个人学习记录请保存在本机，不要提交到公开仓库。"
+  },
+  "summary": {
+    "courses": 590,
+    "learner_gates": {"total": 2950, "not_started": 2950, "in_progress": 0, "submitted": 0},
+    "labs": {"basic_total": 40, "basic_completed": 0, "boss_total": 8, "boss_completed": 0}
+  },
+  "current_position": {
+    "course_id": "PRE0",
+    "next_action": "打开第一节双语课堂",
+    "course_index": 1,
+    "updated_at": "2026-09-22T00:00:00+08:00"
+  },
+  "learner_completion_rule": "机器基线不改变学习者状态；必须有本人证据并经人工验收。",
+  "courses": [],
+  "boss": [],
+  "capstones": [],
+  "updated_at": "2026-09-22T00:00:00+08:00"
+}

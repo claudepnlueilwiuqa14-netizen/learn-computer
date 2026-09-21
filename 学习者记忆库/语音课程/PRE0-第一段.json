@@ -1,0 +1,58 @@
+{
+  "lesson_id": "PRE0-voice-01",
+  "title": "What does a computer do? / 电脑到底做什么？",
+  "voices": {
+    "english": "en-GB-RyanNeural",
+    "chinese": "zh-CN-YunyangNeural"
+  },
+  "turns": [
+    {
+      "language": "en",
+      "text": "Hello, and welcome to your first computer science lesson. I am your teacher, and we will build every idea from the very beginning. We will go slowly, practise often, and celebrate each small discovery."
+    },
+    {
+      "language": "zh",
+      "text": "你好，欢迎来到你的第一节计算机课。我会像老师一样陪你从最基础开始建立每一个概念。我们会慢慢来，经常练习，也会认真记住每一个小发现。"
+    },
+    {
+      "language": "en",
+      "text": "Today’s question is simple: what does a computer do when you press a key? The key idea is input, process, and output."
+    },
+    {
+      "language": "zh",
+      "text": "今天的问题很简单：当你按下一个按键时，电脑到底做了什么？核心思想是：输入、处理和输出。"
+    },
+    {
+      "language": "en",
+      "text": "Input means information entering the computer. Process means the computer works on that information. Output means the result comes back to you, perhaps on a screen or through a speaker."
+    },
+    {
+      "language": "zh",
+      "text": "Input，也就是输入，指信息进入电脑。Process，也就是处理，指电脑对这些信息进行工作。Output，也就是输出，指结果回到你这里，可能显示在屏幕上，也可能从音箱播放出来。"
+    },
+    {
+      "language": "en",
+      "text": "Please pause here and predict: when you type the letter A, what is the input, what is the process, and what is the output? Say your answer aloud before you continue."
+    },
+    {
+      "language": "zh",
+      "text": "现在请暂停一下，先预测：当你输入字母 A 时，什么是输入，什么是处理，什么是输出？请在继续之前，用自己的话说出答案。"
+    },
+    {
+      "language": "en",
+      "text": "The five words for today are input, process, memory, storage, and output. Repeat them once: input, process, memory, storage, output."
+    },
+    {
+      "language": "zh",
+      "text": "今天的五个词是：input 输入，process 处理，memory 内存，storage 存储，output 输出。请跟着我重复一遍。"
+    },
+    {
+      "language": "en",
+      "text": "You do not need to memorise everything at once. Your first win is simply this: every computer action has an input, a change of state, and an observable output."
+    },
+    {
+      "language": "zh",
+      "text": "你不需要一次记住所有东西。今天的第一个胜利只有一句话：每一个电脑动作，都有输入、状态变化，以及可以观察到的输出。"
+    }
+  ]
+}

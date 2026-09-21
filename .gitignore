@@ -1,0 +1,10 @@
+# Personal learner data: keep it on the local computer, never publish it.
+学习者记忆库/课堂记录/
+学习者记忆库/答辩/
+学习者记忆库/备份学习记录/
+学习者记忆库/当前状态.local.json
+学习者记忆库备份/
+evidence/
+**/__pycache__/
+*.pyc
+*.log
