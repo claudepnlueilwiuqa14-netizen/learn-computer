@@ -14,6 +14,21 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+# 强制直连：本机残留的 HTTPS_PROXY=127.0.0.1:62922 是已失效代理，
+# urllib 默认会继承它导致模型调用全走死代理(502)。清掉并强制无代理。
+for _k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+           "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"):
+    os.environ.pop(_k, None)
+_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+# 网关上游会按 User-Agent 拦截 Python-urllib（"Upstream access forbidden"），
+# 必须用浏览器 UA 才能放行；上游偶发 502，做多模型回退 + 重试。
+_REQUEST_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+)
+_MODEL_FALLBACKS = ["gpt-5.5", "gpt-5.4", "gpt-5.2", "gpt-5.4-mini"]
+
 
 class ClassroomHandler(SimpleHTTPRequestHandler):
     classroom_root: Path
@@ -31,11 +46,11 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         """Read optional model settings only from the server environment."""
         base_url = os.environ.get("AI_BASE_URL", "https://api.985la.cn").strip().rstrip("/")
         api_key = os.environ.get("AI_API_KEY", "").strip()
-        model = os.environ.get("AI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+        model = os.environ.get("AI_MODEL", "gpt-5.5").strip() or "gpt-5.5"
         try:
-            timeout = max(5.0, min(120.0, float(os.environ.get("AI_TIMEOUT_SECONDS", "35"))))
+            timeout = max(5.0, min(180.0, float(os.environ.get("AI_TIMEOUT_SECONDS", "90"))))
         except ValueError:
-            timeout = 35.0
+            timeout = 90.0
         if base_url.endswith("/chat/completions"):
             endpoint = base_url
         elif base_url.endswith("/v1"):
@@ -254,9 +269,18 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         if correction_requested or looks_like_english_sentence:
             return self._english_correction(q_original)
 
-        if any(term in q for term in ("实验", "命令", "报错", "错误", "失败", "error", "bug")):
+        if any(term in q for term in ("命令", "报错", "错误", "失败", "error", "bug")):
             return (f"先不要盲目重试。请按四行发我：\n1. 你做了什么；\n2. 原始输出；\n3. 退出码或完整错误文字；\n4. 你本来期待什么。\n\n"
                     f"本课的验收原则是：{invariant}。我会先判断是输入错误、状态变化错误，还是你对输出的解释错误。")
+
+        concept_requested = any(term in q for term in ("输入", "input", "处理", "process", "输出", "output"))
+        if concept_requested:
+            return (f"在《{title}》的{module}，先把电脑想成‘接收 → 变化 → 告诉你’三步。\n"
+                    "1. 输入：电脑收到什么（键盘文字、文件、点击）。\n"
+                    "2. 处理：程序按规则读取、计算或改变状态。\n"
+                    "3. 输出：屏幕、文件或错误信息告诉你发生了什么。\n\n"
+                    f"请结合本课主题‘{topic}’写三行：输入是什么？发生了什么变化？你看到了什么输出？"
+                    "只写最简单的词也可以，我会逐行指出证据和英语表达。")
 
         exact_word = next((item for item in words if item.get("word", "").lower() in re.findall(r"[a-z]+(?:'[a-z]+)?", q)), None)
         if exact_word or any(term in q for term in ("单词", "词汇", "英语", "英文", "word", "vocabulary")):
@@ -282,14 +306,6 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                     f"例句：{grammar.get('example') or context.get('sentence') or 'I open the file.'}\n"
                     f"中文：{grammar.get('translation') or '我打开文件。'}\n\n"
                     f"现在只做一步：{grammar.get('task') or '照着结构写一句和电脑有关的短句。'}")
-
-        if any(term in q for term in ("输入", "input", "处理", "process", "输出", "output")):
-            return (f"在《{title}》的{module}，先把电脑想成‘接收 → 变化 → 告诉你’三步。\n"
-                    "1. 输入：电脑收到什么（键盘文字、文件、点击）。\n"
-                    "2. 处理：程序按规则读取、计算或改变状态。\n"
-                    "3. 输出：屏幕、文件或错误信息告诉你发生了什么。\n\n"
-                    f"请结合本课主题‘{topic}’写三行：输入是什么？发生了什么变化？你看到了什么输出？"
-                    "只写最简单的词也可以，我会逐行指出证据和英语表达。")
 
         if any(term in q for term in ("下一步", "当前模块", "怎么做", "闯关", "lv1", "lab", "实验", "证据")):
             return (f"你现在在{module}。先做这一条最小路线：\n"
@@ -334,28 +350,51 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             "如果涉及命令，只给可撤销、低风险、逐步验证的操作，并说明预期输出。\n"
             "当前课堂上下文：" + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
         )
-        payload = {
-            "model": config["model"],
-            "messages": [{"role": "system", "content": system}, *recent_messages, {"role": "user", "content": message}],
-            "temperature": 0.2,
-            "max_tokens": 900,
-        }
-        request = urllib.request.Request(
-            config["endpoint"],
-            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {config['api_key']}"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=config["timeout"]) as response:
-                result = json.loads(response.read().decode("utf-8"))
-            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-            if isinstance(content, list):
-                content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
-            content = str(content).strip()
-            return content[:8_000] if content else None
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError):
-            return None
+        messages = [
+            {"role": "system", "content": system},
+            *recent_messages,
+            {"role": "user", "content": message},
+        ]
+        # 主模型失败（上游 502/超时）时自动切到回退模型；每个模型重试 2 次。
+        models_to_try = [config["model"]] + [m for m in _MODEL_FALLBACKS if m != config["model"]]
+        last_err = None
+        for model in models_to_try:
+            for _attempt in range(3):  # 首次 + 重试 2 次
+                try:
+                    payload = {
+                        "model": model,
+                        "messages": messages,
+                        "temperature": 0.2,
+                        "max_tokens": 900,
+                    }
+                    request = urllib.request.Request(
+                        config["endpoint"],
+                        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {config['api_key']}",
+                            "User-Agent": _REQUEST_UA,
+                        },
+                        method="POST",
+                    )
+                    with _NO_PROXY_OPENER.open(request, timeout=config["timeout"]) as response:
+                        result = json.loads(response.read().decode("utf-8"))
+                    if isinstance(result, dict) and result.get("error"):
+                        last_err = result["error"].get("message", str(result["error"]))
+                        break  # 该模型上游明确报错，换下一个模型
+                    content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if isinstance(content, list):
+                        content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+                    content = str(content).strip()
+                    return content[:8_000] if content else None
+                except urllib.error.HTTPError as e:
+                    last_err = f"HTTP {e.code}: {e.read().decode('utf-8')[:200]}"
+                    if e.code and 400 <= e.code < 500:
+                        break  # 4xx 一般是模型/鉴权问题，换下一个模型
+                except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, IndexError, TypeError):
+                    last_err = "网络/解析错误"
+                    # 超时或连接错：重试同一个模型
+        return None
 
     def chat_context(self, course_id: str, module_id: str = "", module_index: int = 0) -> dict:
         """Collect a small, durable lesson snapshot for the local conversational tutor.
@@ -417,8 +456,8 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
         if previous:
             prefix += "我也记得你刚才提到的：“" + previous[-1][:120] + "”。"
         elif context.get("recent_saved_chat"):
-            last_saved = context["recent_saved_chat"][-1]
-            if last_saved.get("role") == "user":
+            last_saved = next((item for item in reversed(context["recent_saved_chat"]) if item.get("role") == "user"), None)
+            if last_saved:
                 prefix += "我也记得你之前在本节写过：“" + str(last_saved.get("content", ""))[:120] + "”。"
         if context["latest_answer"]:
             prefix += "你最近保存的计算机回答是：“" + context["latest_answer"] + "”。我们会从这句继续纠正。"
