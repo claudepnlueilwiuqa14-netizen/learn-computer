@@ -1944,7 +1944,14 @@ def main() -> None:
     parser.add_argument("--host", default=os.environ.get("CLASSROOM_HOST", "127.0.0.1"))
     parser.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
-    root = args.root.resolve()
+    root = args.root
+    # Windows 上允许 git-bash 风格路径 /c/Users/... 正确解析为 C:/Users/...
+    # 否则 Path("/c/...").resolve() 会变成 C:\c\Users\...，导致静态页面 404。
+    root_str = str(root)
+    if os.name == "nt" and root_str.startswith("/") and len(root_str) >= 3 and root_str[2] == "/":
+        root_str = root_str[1] + ":" + root_str[2:]
+        root = Path(root_str)
+    root = root.resolve()
     ClassroomHandler.classroom_root = root
     ClassroomHandler.memory_root = root.parent
     handler = lambda *handler_args, **kwargs: ClassroomHandler(  # noqa: E731
