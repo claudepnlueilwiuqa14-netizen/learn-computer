@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import tempfile
 import urllib.error
 import urllib.request
@@ -140,36 +141,175 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
     def course_record(self, course_id: str) -> dict:
         return next((item for item in self.load_courses() if item.get("id") == course_id), {"id": course_id, "title": course_id, "topic_focus": "computer science"})
 
-    def assistant_reply(self, course_id: str, question: str) -> str:
-        """Give an immediate, explainable reply without pretending to be a cloud model."""
+    def _assistant_lesson_snapshot(self, course_id: str, module_id: str = "", module_index: int = 0) -> dict:
+        """Build the small, course-specific teaching context used by the local tutor."""
         course = self.course_record(course_id)
-        title = str(course.get("title", course_id))
-        topic = str(course.get("topic_focus", title))
-        contract = self.course_contract(course_id)
-        mechanism = str(contract.get("Mechanism", ""))
-        invariant = str(contract.get("Invariant", ""))
-        q = " ".join(str(question or "").lower().split())
+        lesson_path = self.classroom_root / f"{course_id}-第一段.json"
+        try:
+            lesson = json.loads(lesson_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            lesson = self.generated_lesson(course_id)
+        if not isinstance(lesson, dict):
+            lesson = self.generated_lesson(course_id)
+
+        try:
+            english_path = self.classroom_root / f"{course_id}-英语.json"
+            english_raw = json.loads(english_path.read_text(encoding="utf-8"))
+            english = self.normalize_english_lesson(course_id, english_raw)
+        except (OSError, json.JSONDecodeError, TypeError, KeyError):
+            english = self.generated_english_lesson(course_id)
+        english = english if isinstance(english, dict) else {}
+
+        summary = self.contract_summary(course_id)
+        layers = summary.get("layers", []) if isinstance(summary, dict) else []
+        try:
+            selected_index = max(0, int(module_index or 0))
+        except (TypeError, ValueError):
+            selected_index = 0
+        selected_layer = layers[selected_index - 1] if 0 < selected_index <= len(layers) else {}
+        words = []
+        for item in (english.get("words", []) if isinstance(english.get("words", []), list) else [])[:24]:
+            if not isinstance(item, dict):
+                continue
+            words.append({
+                "word": str(item.get("word", "")),
+                "meaning": str(item.get("meaning", "")),
+                "ipa": str(item.get("ipa", "")),
+                "example": str(item.get("example", "")),
+                "translation": str(item.get("translation", "")),
+            })
+        grammar = english.get("grammar", {}) if isinstance(english.get("grammar"), dict) else {}
+        turns = lesson.get("turns", []) if isinstance(lesson.get("turns"), list) else []
+        transcript = [str(item.get("text", "")).strip() for item in turns[:6] if isinstance(item, dict) and item.get("text")]
+        return {
+            "course_id": course_id,
+            "course_title": str(course.get("title", course_id)),
+            "topic": str(course.get("topic_focus", course.get("title", "computer science"))),
+            "lesson_question": str(lesson.get("question_prompt", ""))[:800],
+            "lesson_transcript": transcript,
+            "module_id": str(module_id or selected_layer.get("id", "")),
+            "module_index": selected_index,
+            "module_title": str(selected_layer.get("name", selected_layer.get("title", ""))),
+            "module_beginner": str(selected_layer.get("beginner", selected_layer.get("beginner_explanation", ""))),
+            "module_knowledge": str(selected_layer.get("knowledge", selected_layer.get("concept", ""))),
+            "module_action": str(selected_layer.get("action", selected_layer.get("practice", ""))),
+            "english_stage": english.get("stage", {}) if isinstance(english.get("stage"), dict) else {},
+            "english_words": words,
+            "english_grammar": {
+                "title": str(grammar.get("title", "")),
+                "pattern": str(grammar.get("pattern", "")),
+                "explanation": str(grammar.get("explanation", "")),
+                "example": str(grammar.get("example", "")),
+                "translation": str(grammar.get("translation", "")),
+                "task": str(grammar.get("task", "")),
+            },
+            "sentence": str(english.get("lesson_sentence", {}).get("english", "")) if isinstance(english.get("lesson_sentence"), dict) else "",
+        }
+
+    @staticmethod
+    def _english_correction(text: str) -> str:
+        """Offer a deliberately modest pre-check; teacher review remains authoritative."""
+        value = " ".join(str(text or "").strip().split())
+        if not value:
+            return "我还没有看到你的英文句子。请直接输入一句最短的话，例如：I open the file."
+        notes = []
+        tokens = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", value)
+        lowered = [token.lower() for token in tokens]
+        if tokens and tokens[0].lower() == "i" and tokens[0] != "I":
+            notes.append("句首的 I 要大写")
+        if value[-1] not in ".?!":
+            notes.append("完整句子末尾补一个句号、问号或感叹号")
+        if len(tokens) >= 2 and lowered[0] in {"am", "is", "are", "open", "close", "run", "show", "type"}:
+            notes.append("先找主语：最短陈述句通常是‘谁/什么 + 做什么 + 对什么’")
+        if "i is" in value.lower():
+            notes.append("I 后面用 am，不用 is")
+        if "you is" in value.lower() or "we is" in value.lower() or "they is" in value.lower():
+            notes.append("you、we、they 后面通常用 are")
+        if "he are" in value.lower() or "she are" in value.lower():
+            notes.append("he、she 后面通常用 is")
+        if notes:
+            return "我先做一个小预检（不是最终评分）：\n" + "\n".join(f"- {note}" for note in notes) + "\n\n请把修改后的同一句再发一次，我会继续检查拼写、语序和意思。"
+        return "这句暂时没有发现明显的基础格式问题。下一步请自己说出：谁（主语）→ 做什么（动词）→ 对什么做（对象），再告诉我中文意思。"
+
+    def assistant_reply(self, course_id: str, question: str, context: dict | None = None) -> str:
+        """Give an immediate, explainable, course-specific reply without pretending to be a cloud model."""
+        context = context or self._assistant_lesson_snapshot(course_id)
+        title = str(context.get("course_title", course_id))
+        topic = str(context.get("topic", title))
+        invariant = str(self.course_contract(course_id).get("Invariant", "每个结论都要对应一个可观察证据"))
+        q_original = " ".join(str(question or "").strip().split())
+        q = q_original.lower()
+        words = context.get("english_words", []) if isinstance(context.get("english_words"), list) else []
+        grammar = context.get("english_grammar", {}) if isinstance(context.get("english_grammar"), dict) else {}
+        stage = context.get("english_stage", {}) if isinstance(context.get("english_stage"), dict) else {}
+        module = f"模块 {context.get('module_index')} · {context.get('module_title')}" if context.get("module_index") else "本课导入模块"
+        correction_requested = any(term in q for term in ("改一下", "纠正", "校对", "批改", "我写", "我的句子", "correct", "check my english"))
+        looks_like_english_sentence = bool(re.search(r"\b(i|you|he|she|we|they|the|a|an)\b", q) and len(re.findall(r"[a-z]+", q)) >= 2 and not re.match(r"^(what|why|how|can|do|does|is|are)\b", q))
+
+        if any(term in q for term in ("你是谁", "你是什么", "codex", "chatgpt", "助教是谁")):
+            return ("我是这节课里的本地上下文助教，不是假装成当前 Codex 对话。"
+                    "我能读取本课内容、当前模块、英语词卡和已经保存的作答；每次回答都会按本节记录保存。"
+                    "如果本机后端配置了云端模型，才会额外显示云端助教。")
+
+        if correction_requested or looks_like_english_sentence:
+            return self._english_correction(q_original)
+
+        if any(term in q for term in ("实验", "命令", "报错", "错误", "失败", "error", "bug")):
+            return (f"先不要盲目重试。请按四行发我：\n1. 你做了什么；\n2. 原始输出；\n3. 退出码或完整错误文字；\n4. 你本来期待什么。\n\n"
+                    f"本课的验收原则是：{invariant}。我会先判断是输入错误、状态变化错误，还是你对输出的解释错误。")
+
+        exact_word = next((item for item in words if item.get("word", "").lower() in re.findall(r"[a-z]+(?:'[a-z]+)?", q)), None)
+        if exact_word or any(term in q for term in ("单词", "词汇", "英语", "英文", "word", "vocabulary")):
+            if exact_word:
+                card = exact_word
+                sentence = card.get("example") or "请用这个词写一个最短句。"
+                return (f"我们只学一个词：{card.get('word')}。\n"
+                        f"意思：{card.get('meaning') or '本课词义待你回忆'}\n"
+                        f"音标：{card.get('ipa') or '页面词卡会提供可用音标'}\n"
+                        f"例句：{sentence}\n"
+                        f"翻译：{card.get('translation') or '先自己翻译，再对照课堂'}\n\n"
+                        "闯关一步：请先遮住上面的中文，键盘输入这个词，再用它写一个三到五词的英文句子。")
+            word_list = "；".join(f"{item.get('word')}（{item.get('meaning')}）" for item in words[:8])
+            return (f"本课英语阶段是 {stage.get('id', 'A0')} · {stage.get('label', '从零开始')}。"
+                    f"当前词卡不是脱离课程的词表，而是和《{title}》一起练的：{word_list or '词卡正在载入'}。"
+                    "每个词都按‘看拼写 → 听读音/看音标 → 说中文 → 键盘拼写 → 用已有语法造句’练。"
+                    f"本课句型是：{grammar.get('pattern') or '先找主语，再找动词'}。你可以直接发一个词，我会只讲这个词。")
+
+        if any(term in q for term in ("语法", "句型", "语序", "grammar", "sentence")):
+            return (f"本课语法只先学一个台阶：{grammar.get('title') or '主语 + 动词 + 对象'}。\n"
+                    f"结构：{grammar.get('pattern') or 'Subject + verb + object'}\n"
+                    f"老师讲解：{grammar.get('explanation') or '先找谁，再找做什么，最后找对什么做。'}\n"
+                    f"例句：{grammar.get('example') or context.get('sentence') or 'I open the file.'}\n"
+                    f"中文：{grammar.get('translation') or '我打开文件。'}\n\n"
+                    f"现在只做一步：{grammar.get('task') or '照着结构写一句和电脑有关的短句。'}")
+
         if any(term in q for term in ("输入", "input", "处理", "process", "输出", "output")):
-            return (f"先把问题缩成三步：输入是电脑收到的东西，处理是电脑根据规则改变状态，输出是你能观察到的结果。"
-                    f"在本课《{title}》里，请写一个自己的例子：输入是什么 → 发生了什么变化 → 你看到了什么输出。"
-                    f"如果你愿意，把这三段贴回来，我会继续逐句帮你检查。")
-        if any(term in q for term in ("英语", "英文", "单词", "语法", "english", "word", "grammar")):
-            return (f"本课英语先服务于计算机理解。先选一个本课术语，按“英文单词 → 中文意思 → 例句”写出来，"
-                    f"再用 Subject + verb + object 写一句话。不要一次写长句；我会先检查拼写，再检查语序和语法。")
+            return (f"在《{title}》的{module}，先把电脑想成‘接收 → 变化 → 告诉你’三步。\n"
+                    "1. 输入：电脑收到什么（键盘文字、文件、点击）。\n"
+                    "2. 处理：程序按规则读取、计算或改变状态。\n"
+                    "3. 输出：屏幕、文件或错误信息告诉你发生了什么。\n\n"
+                    f"请结合本课主题‘{topic}’写三行：输入是什么？发生了什么变化？你看到了什么输出？"
+                    "只写最简单的词也可以，我会逐行指出证据和英语表达。")
+
+        if any(term in q for term in ("下一步", "当前模块", "怎么做", "闯关", "lv1", "lab", "实验", "证据")):
+            return (f"你现在在{module}。先做这一条最小路线：\n"
+                    f"1. 用一句话复述：{context.get('module_beginner') or '电脑收到什么、改变了什么、输出了什么。'}\n"
+                    f"2. 完成页面里的本模块计算机回答和英语短句。\n"
+                    f"3. 留下一个可观察证据：{context.get('module_action') or '原始输入、原始输出和你的解释。'}\n"
+                    "4. 再提交当前 Lv 关卡，不要跳到下一关。")
+
         if any(term in q for term in ("视频", "youtube", "链接", "播放")):
-            return ("视频只是建立直觉，打开官方资源后请回到课堂完成一个回答或实验。"
-                    "如果播放器打不开，把页面标题或错误文字贴给我，我会给你文字资料替代路径。")
-        if any(term in q for term in ("实验", "lab", "证据", "命令", "报错", "错误", "失败", "error")):
-            return (f"先不要反复重试。请按“你做了什么 / 原始输出 / 退出码或错误文字 / 你期待什么”四行贴出。"
-                    f"本课的机制是：{mechanism or '先观察输入、状态变化和输出'}。"
-                    f"验收时还要说明限制或清理步骤。")
-        if any(term in q for term in ("为什么", "不懂", "不会", "区别", "意思", "how", "why", "what")):
-            return (f"你现在学习的是《{title}》，主题是“{topic}”。我们先不追求术语，先回答一个小问题："
-                    f"你看到的现象是什么？你认为电脑发生了什么？哪一步最不明白？"
-                    f"本课要守住的核心不变量是：{invariant or '每个结论都要对应一个可观察证据'}。")
-        return ("我已经收到问题并按当前课程保存。为了马上帮你拆解，请补充三点中的任意一点："
-                "你正在做的模块、看到的具体现象、或者你希望得到的结果。"
-                "你也可以只写一句最简单的话，助教会从这句话开始追问。")
+            return ("视频只用来建立直觉，不能代替本课证据。看完后回到本页，写下‘我看到什么 → 我猜机制是什么 → 哪个结果支持猜测’。"
+                    "如果视频打不开，把标题或错误文字贴回来，我会用当前课程的文字和可执行小实验继续教。")
+
+        if any(term in q for term in ("为什么", "不懂", "不会", "区别", "意思", "how", "why", "what", "confused")):
+            return (f"你现在学习《{title}》，主题是‘{topic}’。我们先只拆一个台阶：\n"
+                    "请从下面三项选一项回答：A. 我看到的现象；B. 我猜电脑发生的变化；C. 我不知道的词或一步。\n"
+                    f"当前模块是{module}，核心规则是：{invariant}。你只要回 A、B 或 C 加一句话，我就从那一句继续。")
+
+        return (f"我已经把问题保存到《{title}》的本节记录。你现在在{module}，英语阶段是 {stage.get('id', 'A0')}。\n"
+                f"本课要完成的题目是：{context.get('lesson_question') or '用自己的话说明输入、变化和可观察输出。'}\n"
+                "为了立刻开始，请只补充一个东西：你正在看的模块、看到的现象，或你想写出的结果。")
 
     def remote_tutor_reply(self, context: dict, message: str, recent: list[dict]) -> str | None:
         """Ask an OpenAI-compatible upstream only when the server has a key.
@@ -232,14 +372,17 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             path = history_root / folder / f"{course_id}.jsonl"
             items = self.read_tail(path, 1)
             return str(items[-1].get(field, "")).strip()[:240] if items else ""
-        course = self.course_record(course_id)
         contract = self.course_contract(course_id)
-        return {
-            "course_id": course_id,
-            "course_title": str(course.get("title", course_id)),
-            "topic": str(course.get("topic_focus", course.get("title", "computer science"))),
-            "module_id": str(module_id or ""),
-            "module_index": max(0, int(module_index or 0)),
+        context = self._assistant_lesson_snapshot(course_id, module_id, module_index)
+        chat_path = history_root / "助教聊天" / f"{course_id}.jsonl"
+        saved_chat = []
+        for item in self.read_tail(chat_path, 12):
+            if isinstance(item, dict) and item.get("content"):
+                saved_chat.append({
+                    "role": "assistant" if item.get("role") == "assistant" else "user",
+                    "content": str(item.get("content", ""))[:320],
+                })
+        context.update({
             "answers": count("课堂回答"),
             "english": count("英语练习"),
             "modules": count("模块回答"),
@@ -249,14 +392,16 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             "latest_english": latest("英语练习", "answer"),
             "latest_module": latest("模块回答", "answer"),
             "invariant": str(contract.get("Invariant", "每个结论都要对应可观察证据")),
-        }
+            "recent_saved_chat": saved_chat,
+        })
+        return context
 
     def chat_reply(self, course_id: str, message: str, recent: list[dict] | None = None, *, module_id: str = "", module_index: int = 0) -> tuple[str, dict]:
         """Return a continuous-tutor reply and the context used to produce it."""
         context = self.chat_context(course_id, module_id, module_index)
         recent = recent if isinstance(recent, list) else []
         previous = [str(item.get("content", "")).strip() for item in recent if item.get("role") == "user" and item.get("content")]
-        reply = self.assistant_reply(course_id, message)
+        reply = self.assistant_reply(course_id, message, context)
         remote_reply = self.remote_tutor_reply(context, message, recent)
         assistant_mode = "local_contextual"
         if remote_reply:
@@ -271,6 +416,10 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
             prefix += "。"
         if previous:
             prefix += "我也记得你刚才提到的：“" + previous[-1][:120] + "”。"
+        elif context.get("recent_saved_chat"):
+            last_saved = context["recent_saved_chat"][-1]
+            if last_saved.get("role") == "user":
+                prefix += "我也记得你之前在本节写过：“" + str(last_saved.get("content", ""))[:120] + "”。"
         if context["latest_answer"]:
             prefix += "你最近保存的计算机回答是：“" + context["latest_answer"] + "”。我们会从这句继续纠正。"
         elif context["latest_module"]:
@@ -281,6 +430,8 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                     f"模块回答 {context['modules']} 条、关卡 {context['gates']} 条、Lab {context['labs']} 条。")
         if assistant_mode == "remote_model":
             prefix += "云端助教已结合本节记录生成这次回答。"
+        else:
+            prefix += "本地上下文助教已读取本课内容和保存记录。"
         return prefix + reply + "\n\n" + progress, context
 
     def course_navigation(self, course_id: str) -> dict:
@@ -1382,7 +1533,9 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                     {"timestamp": timestamp, "course_id": course_id, "role": "assistant", "content": item.get("assistant_reply", item.get("reply", "")), "source": "legacy-assistant-inbox", "assistant_mode": item.get("assistant_mode", "local_contextual"), "teacher_review": item.get("teacher_review", "pending")},
                 ])
             messages = legacy_messages + messages
-            self.send_json(200, {"ok": True, "course_id": course_id, "messages": messages[-200:], "persistent_path": f"课堂记录/助教聊天/{course_id}.jsonl", "assistant_mode": "local_contextual"})
+            visible_messages = messages[-200:]
+            modes = [item.get("assistant_mode") for item in reversed(visible_messages) if item.get("role") == "assistant" and item.get("assistant_mode")]
+            self.send_json(200, {"ok": True, "course_id": course_id, "messages": visible_messages, "persistent_path": f"课堂记录/助教聊天/{course_id}.jsonl", "assistant_mode": modes[0] if modes else "local_contextual"})
             return
         if route == "/api/review":
             queue_path = self.memory_root / "复习队列.json"
@@ -1511,7 +1664,7 @@ class ClassroomHandler(SimpleHTTPRequestHandler):
                 self.append_jsonl(global_chat, user_record)
                 self.append_jsonl(global_chat, assistant_record)
                 self.update_current_position(course_id, "继续在本节助教聊天中提问；聊天记录已永久保存。", "assistant-chat")
-                self.send_json(200, {"ok": True, "message": "消息已保存，助教已立即回复。", "reply": reply, "messages": [user_record, assistant_record], "assistant_mode": "local_contextual", "persistent_path": f"课堂记录/助教聊天/{course_id}.jsonl", "review": "pending"})
+                self.send_json(200, {"ok": True, "message": "消息已保存，助教已立即回复。", "reply": reply, "messages": [user_record, assistant_record], "assistant_mode": context.get("assistant_mode", "local_contextual"), "persistent_path": f"课堂记录/助教聊天/{course_id}.jsonl", "review": "pending"})
                 return
             answer = str(payload.get("answer", "")).strip()
             if not answer:
