@@ -1,0 +1,7 @@
+# 课堂助教后端只用 Python 标准库（http.server / urllib / pathlib / json），
+# 无需第三方依赖。以下仅作记录与最小运行环境说明。
+#
+# 运行要求：
+#   Python >= 3.11  （已在 Windows / Linux 实测 3.13）
+#
+# 若用 Docker，基础镜像 python:3.13-slim 已满足，无需 pip install。

@@ -1,0 +1,25 @@
+[Unit]
+Description=本地课堂助教服务 (课堂模式)
+After=network.target
+
+[Service]
+# 用专用低权限用户运行；代码与数据放在 /opt/classroom
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/classroom/学习者记忆库/语音课程
+
+# 密钥与配置从 .env 读，不要把 key 写进这个 unit 文件
+EnvironmentFile=/opt/classroom/.env
+
+ExecStart=/usr/bin/python3 /opt/classroom/学习者记忆库/语音课程/serve_classroom.py \
+    --root /opt/classroom/学习者记忆库/语音课程 \
+    --port 8765 \
+    --host 127.0.0.1
+
+Restart=always
+RestartSec=5
+# 限制内存，防止异常时把服务器拖垮
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
